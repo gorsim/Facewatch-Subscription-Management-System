@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Camera Stock Control</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%2310b981'/%3E%3Ctext x='32' y='39' font-size='28' text-anchor='middle' fill='%23052e2b'%3ECC%3C/text%3E%3C/svg%3E" />
+  <style>
+
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --accent:#10b981; --danger:#ef4444; --border:#1f2937; }
+    body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial; background:var(--bg); color:white; }
+    .container { max-width:1100px; margin:32px auto; padding:0 16px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    h1 { font-size:24px; margin:0 0 8px; }
+    p.sub { color:var(--muted); margin:0 0 20px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    label { font-size:12px; color:var(--muted); display:block; margin-bottom:8px; }
+    input[type=file] { width:100%; padding:10px; background:#0b1220; border:1px dashed #334155; border-radius:8px; color:#cbd5e1; }
+    button { background:var(--accent); border:none; color:#052e2b; padding:10px 14px; border-radius:8px; font-weight:600; cursor:pointer; }
+    button.secondary { background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
+    button.danger { background:var(--danger); color:white; }
+    .actions { display:flex; gap:12px; margin-top:12px; align-items:center; flex-wrap: wrap; }
+    .search { display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap: wrap; justify-content: flex-end; }
+    .search input { width:220px; padding:8px 10px; border-radius:8px; background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
+    .search select { padding:8px 10px; border-radius:8px; background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
+    .search label { white-space: nowrap; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; }
+    th, td { border-bottom:1px solid #1f2937; padding:10px; text-align:left; font-size:14px; }
+    th { color:#a3b2c7; font-weight:600; position:sticky; top:0; background:var(--panel); z-index:5; cursor:pointer; box-shadow: 0 1px 0 var(--border); }
+    .muted { color:var(--muted); }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+    .pill.ok { background:rgba(16,185,129,.15); color:#10b981; }
+    .pill.warn { background:rgba(239,68,68,.15); color:#ef4444; }
+    .summary { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; }
+    .summary .box { background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; }
+    input[type=text] { width:260px; padding:6px 8px; border-radius:6px; background:#0b1220; color:#e5e7eb; border:1px solid #334155; }
+    select.location { min-width: 220px; }
+    input[type=checkbox][disabled] { opacity: .4; cursor: not-allowed; }
+    .chip { display:inline-flex; align-items:center; gap:6px; background:#0b1220; border:1px solid #334155; border-radius:999px; padding:4px 8px; }
+    .chip button { background:none; border:none; color:#94a3b8; cursor:pointer; }
+    .sticky-actions { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--border); padding: 10px 20px; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; z-index: 3; }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-wrap table { min-width: 980px; }
+    /* Card view */
+    #cardList { display:none; margin-top: 12px; }
+    .card-item { background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:10px; margin-bottom:10px; display:grid; grid-template-columns: 1fr auto; gap:8px; }
+    .card-item.missing { border-color:#7f1d1d; box-shadow:0 0 0 1px #7f1d1d inset; }
+    .card-item .code { font-weight:700; font-size:14px; }
+    .card-item .meta { color:#94a3b8; font-size:12px; }
+    .card-item .controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .card-item .controls input[type=text] { width:200px; }
+    .view-toggle button.active { background:#1e293b; color:#e5e7eb; border:1px solid #334155; }
+    @media (max-width: 768px) {
+      .container { padding: 0 10px; }
+      .actions { gap: 8px; }
+      .search input { width: 160px; }
+      th, td { padding: 6px; font-size: 12px; }
+      select.location { min-width: 160px; }
+      button { padding: 8px 12px; }
+      .sticky-actions { padding: 8px 12px; }
+      .card-item { grid-template-columns: 1fr; }
+      .card-item .controls input[type=text] { width:100%; }
+    }
+    #stockTable tbody.missing-only tr[data-missing="0"] { display: none; }
+    .pagination-hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Camera Stock Control</h1>
+      <p class="sub">Upload monthly CSVs and generate a clean theoretical stock list. Only SAFR-Camera with a non-blank feedname are considered installed.</p>
+      <div class="actions">
+        <span class="chip">Page size:
+          <select id="pageSize">
+            <option>25</option>
+            <option selected>50</option>
+            <option>100</option>
+            <option>200</option>
+            <option>500</option>
+          </select>
+        </span>
+        <span class="chip">Stock Count date:
+          <input id="countDate" type="date" />
+        </span>
+        <span class="chip" id="dateHistoryWrap">
+          Past counts:
+          <select id="dateHistory"><option value="">—</option></select>
+          <button id="refreshDates" class="secondary" title="Refresh saved count dates">↻</button>
+        </span>
+        <span class="chip" id="pageControls" style="display:none">
+          <button id="prevPage">Prev</button>
+          <span id="pageInfo" class="muted"></span>
+          <button id="nextPage">Next</button>
+        </span>
+        <span class="chip view-toggle">
+          View:
+          <button id="viewTable" class="secondary active">Table</button>
+          <button id="viewCards" class="secondary">Cards</button>
+          <label style="margin-left:8px; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="cardsAllFiltered" /> All filtered
+          </label>
+        </span>
+        <span class="chip" style="margin-left:auto">
+          <button id="supportBtn" class="secondary">Support</button>
+          <button id="accountBtn" class="secondary">Account</button>
+          <button id="manageUsersBtn" class="secondary" style="display:none">Users</button>
+          <button id="logoutBtn" class="secondary">Logout</button>
+        </span>
+      </div>
+      <div class="grid">
+        <div>
+          <label>INPUT Stock Delivered (CSV)</label>
+          <input id="delivered" type="file" accept=".csv" />
+        </div>
+        <div>
+          <label>INPUT Cameras Installed (CSV)</label>
+          <input id="installed" type="file" accept=".csv" />
+        </div>
+      </div>
+      <div class="actions">
+        <button id="uploadBtn">Upload Files</button>
+        <button id="generateBtn" class="secondary" disabled>GENERATE STOCK LIST</button>
+        <div class="search">
+          <span style="position:relative; display:inline-flex; align-items:center;">
+            <input id="searchInput" type="text" placeholder="Filter by Camera Code" style="padding-right:28px;" />
+            <button id="clearSearch" class="secondary" title="Clear" style="position:absolute; right:4px; display:none; width:22px; height:24px; line-height:18px;">×</button>
+          </span>
+          <label style="display:flex; align-items:center; gap:8px;">
+            Show Missing Only <input type="checkbox" id="showMissingOnly" />
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            Cam Type:
+            <select id="typeFilter">
+              <option value="">All</option>
+            </select>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            Location:
+            <select id="locationFilter">
+              <option value="">All</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="status" class="muted" style="margin-top:10px;"></div>
+
+      <div id="summary" class="summary" style="display:none">
+        <div class="box"><div class="muted">Total Delivered</div><div id="sumDelivered" style="font-weight:700"></div></div>
+        <div class="box"><div class="muted">Total Installed</div><div id="sumInstalled" style="font-weight:700"></div></div>
+        <div class="box"><div class="muted">Total Physical Count</div><div id="sumPhysical" style="font-weight:700"></div></div>
+        <div class="box"><div class="muted">Total Missing</div><div id="sumMissing" style="font-weight:700"></div></div>
+      </div>
+
+      <div class="table-wrap">
+        <div id="cardList"></div>
+        <table id="stockTable" style="display:none">
+          <thead>
+            <tr>
+              <th data-col="camera_code">Camera Code</th>
+              <th data-col="cam_type">Cam Type</th>
+              <th data-col="po">PO</th>
+              <th data-col="delivery_date">Delivery Date</th>
+              <th data-col="installed">Installed</th>
+              <th data-col="physical">Physical</th>
+              <th data-col="missing">Missing</th>
+              <th data-col="notes">Notes</th>
+              <th data-col="location">Location</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div id="anomalies" style="display:none">
+        <h3 style="margin-top:24px">Anomalies</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Camera Code</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody id="anomalyBody"></tbody>
+        </table>
+      </div>
+
+
+      <div class="actions sticky-actions" style="margin-top:16px; display:none; align-items:center" id="saveActions">
+        <span class="chip">Export:
+          <button id="exportCsv">CSV</button>
+          <button id="exportPdf">PDF</button>
+        </span>
+        <span class="chip">
+          <input type="file" id="uploadCountCsv" accept=".csv" style="display:none" />
+          <button id="uploadCountBtn" type="button">Upload count CSV</button>
+          <button id="downloadCountTemplate" type="button" class="secondary">Template CSV</button>
+        </span>
+        <span class="chip">Bulk:
+          <button id="tickVisible">Tick All</button>
+          <button id="untickVisible">Untick All</button>
+        </span>
+        <span class="chip">Bulk by location:
+          <select id="bulkLocation"><option value="">—</option></select>
+          <button id="tickByLocation">Tick</button>
+          <button id="untickByLocation">Untick</button>
+        </span>
+        <span class="chip" id="locationsChip" style="display:none">Locations:
+          <button id="addLocation">+</button>
+        </span>
+        <span class="chip">
+          <button id="manageLocationsBtn" class="secondary">Manage Locations</button>
+        </span>
+        <span class="chip" id="controlsChip" style="margin-left:auto; display:none">
+          <button id="closeBtn" class="secondary">Close</button>
+          <button id="finishBtn" class="danger">Save and Close</button>
+        </span>
+      </div>
+    <script>
+      // Single, guarded binding of upload/template controls
+      (function ensureUploadBindings(){
+        function tryBind() {
+          const uploadBtn = document.getElementById('uploadCountBtn');
+          const uploadInp = document.getElementById('uploadCountCsv');
+          const templateBtn = document.getElementById('downloadCountTemplate');
+          if (!uploadBtn || !uploadInp || !templateBtn) { setTimeout(tryBind, 100); return; }
+          if (!uploadBtn.dataset.bound) {
+            uploadBtn.dataset.bound = '1';
+            uploadBtn.addEventListener('click', () => uploadInp.click());
+          }
+          if (!uploadInp.dataset.bound) {
+            uploadInp.dataset.bound = '1';
+            uploadInp.addEventListener('change', async () => {
+              if (!uploadInp.files || uploadInp.files.length === 0) return;
+              const addUnknown = confirm('If the CSV contains unknown locations, add them to global locations automatically?');
+              const d = getSelectedDate();
+              const fd = new FormData();
+              fd.append('date', d);
+              fd.append('count_file', uploadInp.files[0]);
+              if (addUnknown) fd.append('add_unknown', '1');
+              const res = await fetch('/upload_count_csv', { method:'POST', body: fd });
+              const data = await res.json();
+              if (!res.ok || data.error) { alert(data.error || 'Upload failed'); return; }
+              if (data.errors && data.errors.length) {
+                alert('Upload completed with warnings:\n' + data.errors.join('\n'));
+              } else {
+                document.getElementById('status').textContent = `Count CSV uploaded. ${data.updated||0} rows updated.`;
+              }
+              await hydrateFromSavedState();
+              applyMissingFilter();
+              applyPagination();
+              uploadInp.value = '';
+            });
+          }
+          if (!templateBtn.dataset.bound) {
+            templateBtn.dataset.bound = '1';
+            templateBtn.addEventListener('click', () => {
+              const rows = [['Camera Code','Physical','Notes','Location']];
+              const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+              const typeVal = document.getElementById('typeFilter').value || '';
+              const locVal = document.getElementById('locationFilter').value || '';
+              document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+                const codeCell = tr.children[0];
+                if (!codeCell) return;
+                const code = (codeCell.innerText || '').toLowerCase();
+                const type = (tr.children[1]?.innerText || '').trim();
+                const loc = (tr.querySelector('select.location')?.value || '').trim();
+                const missing = parseInt(tr.dataset.missing || (tr.querySelector('.missing')?.innerText || '0')) || 0;
+                let ok = true;
+                if (q) ok = ok && code.includes(q);
+                if (typeVal) ok = ok && type === typeVal;
+                if (locVal) ok = ok && loc === locVal;
+                ok = ok && (missing > 0); // Always export only items to be counted (uninstalled/missing)
+                if (!ok) return;
+                rows.push([
+                  codeCell.innerText,
+                  tr.querySelector('.physical-checkbox')?.checked ? '1' : '0',
+                  tr.querySelector('.notes')?.value || '',
+                  tr.querySelector('select.location')?.value || ''
+                ]);
+              });
+              const csv = rows.map(r => r.map(v => '"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n');
+              const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = 'count_template.csv'; a.click();
+              URL.revokeObjectURL(url);
+            });
+          }
+          // Manage Locations navigation (bind once)
+          const manageBtn = document.getElementById('manageLocationsBtn');
+          if (manageBtn && !manageBtn.dataset.bound) {
+            manageBtn.dataset.bound = '1';
+            manageBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              const d = document.getElementById('countDate')?.value || todayStr();
+              const returnUrl = `${window.location.pathname}?date=${encodeURIComponent(d)}&refresh=1`;
+              window.location.href = `/locations?return=${encodeURIComponent(returnUrl)}`;
+            });
+          }
+        }
+        document.addEventListener('DOMContentLoaded', tryBind);
+        setTimeout(tryBind, 400);
+        setTimeout(tryBind, 1000);
+      })();
+    </script>
+
+
+      <script>
+    // Date utilities
+    function todayStr() {
+      const t = new Date();
+      const m = String(t.getMonth()+1).padStart(2,'0');
+      const d = String(t.getDate()).padStart(2,'0');
+      return `${t.getFullYear()}-${m}-${d}`;
+    }
+    function getSelectedDate() {
+      const el = document.getElementById('countDate');
+      return (el && el.value) ? el.value : todayStr();
+    }
+    // Init date input
+    (function initDateControls(){
+      const el = document.getElementById('countDate');
+      const saved = localStorage.getItem('countDate');
+      const urlDate = new URLSearchParams(window.location.search).get('date');
+      el.value = urlDate || saved || todayStr();
+      if (urlDate) localStorage.setItem('countDate', el.value);
+      el.addEventListener('change', () => {
+        if (!el.value) el.value = todayStr();
+        localStorage.setItem('countDate', el.value);
+        hydrateFromSavedState();
+      });
+      // Populate past dates
+      fetch('/list_count_dates').then(r=>r.json()).then(d=>{
+        const sel = document.getElementById('dateHistory');
+        sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
+        sel.addEventListener('change', () => {
+          if (sel.value) {
+            el.value = sel.value; localStorage.setItem('countDate', el.value);
+            // Call hydrate/ensure safely in case the later script hasn’t loaded yet
+            (function callHydrateSafely(){
+              const fn = window.hydrateFromSavedState;
+              if (typeof fn === 'function') fn(); else setTimeout(callHydrateSafely, 60);
+            })();
+            (function callEnsureSafely(){
+              const fn = window.ensureGenerated;
+              if (typeof fn === 'function') fn(); else setTimeout(callEnsureSafely, 60);
+            })();
+          }
+        });
+      }).catch(()=>{});
+
+    async function refreshDateHistory() {
+      try {
+        const resp = await fetch('/list_count_dates');
+        const d = await resp.json();
+        const sel = document.getElementById('dateHistory');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
+        if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
+        const dInput = document.getElementById('countDate');
+        const chosen = dInput?.value;
+        if (chosen && ![...sel.options].some(o => o.value === chosen)) {
+          const opt = document.createElement('option');
+          opt.value = chosen; opt.textContent = chosen; sel.appendChild(opt);
+        }
+        if (chosen) sel.value = chosen;
+      } catch {}
+    }
+    const refreshBtn = document.getElementById('refreshDates');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshDateHistory);
+
+
+
+      // Rebuild options for all row location <select>s from a list (expose globally)
+      window.refreshRowLocationSelects = function(list) {
+        const opts = ['<option value="">—</option>'].concat((list || []).map(v => `<option>${v}</option>`)).join('');
+        document.querySelectorAll('select.location').forEach(sel => {
+          const current = sel.value;
+          sel.innerHTML = opts;
+          // restore prior value if present in the new list; otherwise keep blank
+          sel.value = current && (list || []).includes(current) ? current : '';
+        });
+      }
+
+      // Track unsaved changes (notes/locations/ticks) to confirm on Close
+      let hasUnsavedChanges = false;
+
+    })();
+
+    // Global state for installed per code (from last Generate)
+    let installedMap = {};
+
+    // Auto-save (debounced)
+    let saveTimer = null;
+    function collectStatePayload() {
+      const counts = {}; const notes = {}; const locations_map = {};
+      document.querySelectorAll('.physical-checkbox').forEach(chk => { counts[chk.dataset.code] = chk.checked ? 1 : 0; });
+      document.querySelectorAll('.notes').forEach(n => { notes[n.dataset.code] = n.value || ''; });
+      document.querySelectorAll('select.location').forEach(sel => { locations_map[sel.dataset.code] = sel.value || ''; });
+
+
+      return {
+        date: getSelectedDate(),
+        physical_counts: counts,
+        notes,
+        locations_map,
+        locations_list: getLocationsList(),
+        installed_map: installedMap || {}
+      };
+    }
+    async function saveStateNow() {
+      try {
+        const res = await fetch('/save_physical_count', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(collectStatePayload())
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          statusEl.textContent = `Auto-saved (${new Date().toLocaleTimeString()})`;
+          refreshDateHistory();
+          hasUnsavedChanges = false;
+
+      // Manage Locations navigation
+      (function(){
+        const btn = document.getElementById('manageLocationsBtn');
+        if (!btn) return;
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const d = document.getElementById('countDate')?.value || todayStr();
+          const returnUrl = `${window.location.pathname}?date=${encodeURIComponent(d)}&refresh=1`;
+          window.location.href = `/locations?return=${encodeURIComponent(returnUrl)}`;
+        });
+      })();
+
+        }
+      } catch(e) { /* ignore transient errors */ }
+    }
+    function saveStateDebounced() {
+      clearTimeout(saveTimer);
+
+      saveTimer = setTimeout(saveStateNow, 600);
+    }
+
+      </script>
+
+    </div>
+  </div>
+  <script>
+    let deliveredName = null;
+      // Render Cards from current table rows (global scope)
+      function renderCardsFromTable() {
+        const list = document.getElementById('cardList');
+        if (!list) return;
+        list.innerHTML = '';
+        const showMissing = document.getElementById('showMissingOnly')?.checked;
+        const rows = Array.from(document.querySelectorAll('#stockTable tbody tr'));
+        const allFiltered = document.getElementById('cardsAllFiltered')?.checked;
+        rows.forEach(tr => {
+          // Respect filters and optionally pagination
+          const hiddenByPage = tr.classList.contains('pagination-hidden');
+          if (!allFiltered && hiddenByPage) return;
+          if (tr.style.display === 'none') return; // filtered by search/type/location
+          if (showMissing && !(parseInt(tr.dataset.missing || '0') > 0)) return;
+
+          const code = tr.children[0]?.innerText || '';
+          const type = tr.children[1]?.innerText || '';
+          const date = tr.children[3]?.innerText || '';
+          const installed = tr.children[4]?.innerText || '';
+          const missing = tr.querySelector('.missing')?.innerText || '0';
+          const cb = tr.querySelector('.physical-checkbox');
+          const notes = tr.querySelector('.notes');
+          const locSel = tr.querySelector('select.location');
+          const div = document.createElement('div');
+          div.className = 'card-item' + ((parseInt(missing)>0)?' missing':'');
+          div.innerHTML = `
+            <div>
+              <div class="code">${code}</div>
+              <div class="meta">${type} • ${date} • Installed: ${installed} • Missing: <strong>${missing}</strong></div>
+            </div>
+            <div class="controls">
+              <label style="display:flex;align-items:center;gap:6px;">
+                Physical <input type="checkbox" ${cb?.checked? 'checked':''} ${cb?.disabled? 'disabled':''} />
+              </label>
+              <input type="text" value="${notes?.value||''}" placeholder="Notes" />
+              <select class="location"></select>
+            </div>`;
+          const cbox = div.querySelector('input[type=checkbox]');
+          cbox?.addEventListener('change', () => { if (cb) { const prev = cb.checked; cb.checked = cbox.checked; if (prev !== cb.checked) cb.dispatchEvent(new Event('change', {bubbles:true})); }});
+          const notesInput = div.querySelector('input[type=text]');
+          notesInput?.addEventListener('input', () => { if (notes) { notes.value = notesInput.value; notes.dispatchEvent(new Event('input', {bubbles:true})); }});
+          const sel = div.querySelector('select.location');
+          const baseSel = document.querySelector('#bulkLocation');
+          if (baseSel) {
+            const opts = Array.from(baseSel.querySelectorAll('option')).map(o => ({v:o.value, t:o.textContent}));
+            sel.innerHTML = opts.map(o => `<option value="${o.v}">${o.t}</option>`).join('');
+          }
+          sel.value = locSel?.value || '';
+          sel.addEventListener('change', () => { if (locSel) { locSel.value = sel.value; locSel.dispatchEvent(new Event('change', {bubbles:true})); }});
+          list.appendChild(div);
+        });
+      }
+
+    let installedName = null;
+    let totalPhysical = 0;
+    let totalMissing = 0;
+
+
+      // Ensure results are generated for selected date (uses last uploaded files)
+      async function ensureGenerated() {
+        const table = document.getElementById('stockTable');
+        if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) return;
+        if (!deliveredName || !installedName) {
+          try {
+            const resp = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+            const j = await resp.json();
+            if (j.last_delivered_file && j.last_installed_file) {
+              deliveredName = j.last_delivered_file;
+              installedName = j.last_installed_file;
+            }
+          } catch {}
+        }
+        if (!deliveredName || !installedName) return;
+        try {
+          const res = await fetch('/generate_stock', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ delivered_file: deliveredName, installed_file: installedName })
+          });
+          const data = await res.json();
+          if (res.ok && !data.error) {
+            await renderResults(data);
+            statusEl.textContent = 'Loaded past count.';
+          }
+        } catch {}
+      }
+
+      // Pagination state
+      let page = 1;
+      let pageSize = parseInt(document.getElementById('pageSize').value, 10) || 50;
+
+      function applyPagination() {
+        const tbody = document.querySelector('#stockTable tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const showMissing = document.getElementById('showMissingOnly')?.checked;
+        const visibleRows = rows.filter(r => {
+          const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
+          const matchType = (r.dataset.typeMatch ?? '1') === '1';
+          const matchLoc = (r.dataset.locMatch ?? '1') === '1';
+          const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
+          const inlineVisible = r.style.display !== 'none';
+          return matchSearch && matchType && matchLoc && matchMissing && inlineVisible;
+        });
+        const total = visibleRows.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        if (page > totalPages) page = totalPages;
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        let count = 0;
+        visibleRows.forEach((r, idx) => {
+          const show = idx >= start && idx < end;
+          r.classList.toggle('pagination-hidden', !show);
+          if (show) count++;
+        });
+        document.getElementById('pageControls').style.display = total > pageSize ? '' : 'none';
+        document.getElementById('pageInfo').innerText = `Page ${page} / ${totalPages} (${count} of ${total})`;
+        // If card view is active, refresh cards to reflect current page/filters
+        const cardsEl = document.getElementById('cardList');
+        if (cardsEl && cardsEl.style.display !== 'none') {
+          renderCardsFromTable();
+        }
+      }
+
+      document.getElementById('pageSize').addEventListener('change', (e) => {
+
+        pageSize = parseInt(e.target.value, 10) || 50;
+        page = 1;
+        applyPagination();
+      });
+      document.getElementById('prevPage').addEventListener('click', () => { if (page > 1) { page--; applyPagination(); } });
+      document.getElementById('nextPage').addEventListener('click', () => { page++; applyPagination(); });
+
+    const statusEl = document.getElementById('status');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const generateBtn = document.getElementById('generateBtn');
+
+
+    // Global JS error surfacing
+    window.addEventListener('error', (e) => {
+      const el = document.getElementById('status');
+      if (el) el.textContent = 'JS Error: ' + (e.message || e.error?.message || e.filename || 'unknown');
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const el = document.getElementById('status');
+      const msg = e?.reason?.message || (typeof e.reason === 'string' ? e.reason : JSON.stringify(e.reason||{}));
+      if (el) el.textContent = 'Promise Error: ' + msg;
+    });
+    uploadBtn.onclick = async () => {
+      try {
+        statusEl.textContent = 'Upload clicked...';
+        const d = document.getElementById('delivered').files[0];
+        const i = document.getElementById('installed').files[0];
+        if (!d || !i) { statusEl.textContent = 'Please select both CSV files.'; return; }
+
+        const fd = new FormData();
+        fd.append('delivered_file', d);
+
+
+        fd.append('installed_file', i);
+
+        statusEl.textContent = 'Uploading files...';
+        const res = await fetch('/upload', { method:'POST', body: fd });
+        let data = {};
+        try { data = await res.json(); } catch(e) { throw new Error('Upload failed: invalid server response'); }
+        if (!res.ok || data.error) throw new Error(data.error || 'Upload failed');
+
+        deliveredName = data.delivered_file; installedName = data.installed_file;
+        statusEl.textContent = 'Files uploaded. You can now Generate Stock List.';
+        generateBtn.disabled = false;
+      } catch (e) { statusEl.textContent = 'Error: ' + e.message; console.error(e); }
+    };
+
+    generateBtn.onclick = async () => {
+      try {
+        if (!deliveredName || !installedName) { statusEl.textContent = 'Please upload the files first.'; return; }
+        // Ensure count date is set (default to today)
+        const dInput = document.getElementById('countDate');
+        if (!dInput.value) {
+          const today = new Date();
+          const m = String(today.getMonth()+1).padStart(2,'0');
+          const d = String(today.getDate()).padStart(2,'0');
+          dInput.value = `${today.getFullYear()}-${m}-${d}`;
+        }
+        statusEl.textContent = 'Generating...';
+        const res = await fetch('/generate_stock', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ delivered_file: deliveredName, installed_file: installedName })
+        });
+        let data = {};
+        try { data = await res.json(); } catch(e) { throw new Error('Generate failed: invalid server response'); }
+        if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+        await renderResults(data);
+        statusEl.textContent = 'Generated.';
+      } catch (e) { statusEl.textContent = 'Error: ' + e.message; console.error(e); }
+    };
+
+    async function renderResults(data) {
+      const table = document.getElementById('stockTable');
+      const tbody = table.querySelector('tbody');
+      tbody.innerHTML = '';
+
+      // Populate Cam Type filter options (unique types from data)
+      const typeSet = new Set(['']);
+      data.theoretical_stock.forEach(r => { if (r.cam_type) typeSet.add(r.cam_type); });
+      // After rows are built, include any row-assigned locations into filters and bulk selector
+      setTimeout(async () => {
+        const locationFilter = document.getElementById('locationFilter');
+        const bulkLocation = document.getElementById('bulkLocation');
+        const values = new Set();
+
+        // Global locations (persist across dates)
+        try {
+          const glRes = await fetch('/locations_data');
+          const gl = await glRes.json();
+          (gl.locations || []).forEach(v => { if (v) values.add(v); });
+        } catch {}
+        // Saved per-date locations
+        try {
+          const res = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+          const saved = await res.json();
+          (saved.locations_list || []).forEach(v => { if (v) values.add(v); });
+        } catch {}
+        // Include any locations already assigned in rows
+        document.querySelectorAll('select.location').forEach(sel => {
+          if (sel.value) values.add(sel.value);
+        });
+        const fullList = Array.from(values);
+        // Update filter and bulk dropdowns
+        fullList.forEach(v => {
+          if (![...locationFilter.options].some(o => o.value === v)) {
+            const o1 = document.createElement('option'); o1.value = v; o1.textContent = v; locationFilter.appendChild(o1);
+          }
+          if (![...bulkLocation.options].some(o => o.value === v)) {
+            const o2 = document.createElement('option'); o2.value = v; o2.textContent = v; bulkLocation.appendChild(o2);
+          }
+        });
+        // Also refresh all row selects with the complete list
+        refreshRowLocationSelects(fullList);
+      }, 0);
+
+      const typeFilter = document.getElementById('typeFilter');
+      typeFilter.innerHTML = '';
+      [...typeSet].forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t || 'All';
+        typeFilter.appendChild(opt);
+      });
+
+      // Populate Location filter options from saved state and current rows
+      const locationFilter = document.getElementById('locationFilter');
+      const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+      let saved = {};
+      // Build installed map for auto-save payload and migration
+      installedMap = {};
+      data.theoretical_stock.forEach(row => { installedMap[row.camera_code] = row.installed || 0; });
+      try { saved = await savedRes.json(); } catch {}
+      const locSet = new Set(['']);
+      const savedList = (saved.locations_list || []);
+      savedList.forEach(l => locSet.add(l));
+      data.theoretical_stock.forEach(r => { /* row-specific location filled on hydrate */ });
+      locationFilter.innerHTML = '';
+      [...locSet].forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l; opt.textContent = l || 'All';
+        locationFilter.appendChild(opt);
+      });
+
+      data.theoretical_stock.forEach(row => {
+        const tr = document.createElement('tr');
+        const physical = 0; // starts unticked
+        const missing = Math.max(0, row.theoretical_stock - physical);
+        const disabled = row.theoretical_stock <= 0;
+        const locationSelect = `<select class="location" data-code="${row.camera_code}"></select>`;
+        tr.dataset.theoretical = String(row.theoretical_stock);
+        tr.innerHTML = `
+          <td>${row.camera_code}</td>
+          <td>${row.cam_type || ''}</td>
+          <td>${row.po || ''}</td>
+          <td>${row.delivery_date || ''}</td>
+          <td>${row.installed}</td>
+          <td><input type="checkbox" class="physical-checkbox" data-code="${row.camera_code}" ${disabled ? 'disabled' : ''} /></td>
+          <td class="missing">${missing}</td>
+          <td><input type="text" class="notes" placeholder="Notes" data-code="${row.camera_code}" /></td>
+          <td>${locationSelect}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Update totals on checkbox change (optimized: mutate totals instead of full recompute)
+      totalPhysical = 0; totalMissing = 0;
+      // initialize totals
+      tbody.querySelectorAll('tr').forEach(tr => {
+        const theoretical = parseInt(tr.dataset.theoretical || '0');
+        const physical = tr.querySelector('.physical-checkbox').checked ? 1 : 0;
+        const missing = Math.max(0, theoretical - physical);
+        tr.querySelector('.missing').innerText = missing;
+        tr.dataset.missing = String(missing);
+        totalPhysical += physical; totalMissing += missing;
+      });
+      updateTotalsUI();
+
+      tbody.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('physical-checkbox')) return;
+        const tr = e.target.closest('tr');
+        const theoretical = parseInt(tr.dataset.theoretical || '0');
+        const wasMissing = parseInt(tr.querySelector('.missing').innerText) || 0;
+        const physical = e.target.checked ? 1 : 0;
+        const missing = Math.max(0, theoretical - physical);
+        tr.querySelector('.missing').innerText = missing;
+        tr.dataset.missing = String(missing);
+        totalPhysical += physical ? 1 : -1;
+        totalMissing += (missing - wasMissing);
+        updateTotalsUI();
+        applyMissingFilter();
+        saveStateDebounced();
+        hasUnsavedChanges = true;
+
+      });
+
+      document.getElementById('sumDelivered').innerText = data.summary.total_delivered;
+      document.getElementById('sumInstalled').innerText = data.summary.total_installed;
+      recalcTotals();
+
+      document.getElementById('summary').style.display = 'flex';
+      table.style.display = '';
+
+      // Default sort by Delivery Date descending
+      const deliveryTh = document.querySelector('#stockTable th[data-col="delivery_date"]');
+      if (deliveryTh && !deliveryTh.dataset.initSorted) {
+        deliveryTh.click(); // asc
+        deliveryTh.click(); // desc
+        deliveryTh.dataset.initSorted = '1';
+      }
+      applyPagination();
+
+      const anomalies = document.getElementById('anomalies');
+      const anomalyBody = document.getElementById('anomalyBody');
+      anomalyBody.innerHTML = '';
+      if (data.anomalies && data.anomalies.length) {
+        anomalies.style.display = '';
+        data.anomalies.forEach(a => {
+          const tr = document.createElement('tr');
+          const qty = (a.installed_qty != null) ? a.installed_qty : (a.quantity != null ? a.quantity : '');
+          tr.innerHTML = `<td>${a.type}</td><td>${a.camera_code}</td><td>${qty}</td>`;
+          anomalyBody.appendChild(tr);
+        });
+      } else {
+        anomalies.style.display = 'none';
+      }
+
+      document.getElementById('saveActions').style.display = '';
+      document.getElementById('controlsChip').style.display = '';
+
+      // Build initial cards as well
+      renderCardsFromTable();
+      hydrateFromSavedState();
+      applyMissingFilter();
+    }
+
+
+
+    document.getElementById('showMissingOnly').addEventListener('change', () => { applyMissingFilter(); page = 1; applyPagination(); });
+    // Guard: search button may not exist (we have live search)
+    (function(){
+      const searchBtnEl = document.getElementById('searchBtn');
+      if (searchBtnEl) {
+        searchBtnEl.addEventListener('click', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
+      }
+    })();
+    document.getElementById('typeFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
+    document.getElementById('locationFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
+
+// Live search + clear button
+const searchInputEl = document.getElementById('searchInput');
+const clearSearchBtn = document.getElementById('clearSearch');
+function runSearchPipeline() { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); }
+if (searchInputEl) {
+  searchInputEl.addEventListener('input', () => {
+    runSearchPipeline();
+    if (clearSearchBtn) clearSearchBtn.style.display = searchInputEl.value ? '' : 'none';
+  });
+  searchInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      searchInputEl.value = '';
+      runSearchPipeline();
+      if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+    }
+  });
+}
+if (clearSearchBtn) {
+  clearSearchBtn.addEventListener('click', () => {
+    if (!searchInputEl) return;
+    searchInputEl.value = '';
+    runSearchPipeline();
+    clearSearchBtn.style.display = 'none';
+    searchInputEl.focus();
+  });
+  clearSearchBtn.style.display = (searchInputEl && searchInputEl.value) ? '' : 'none';
+}
+
+
+    function applyLocationFilter() {
+      const lf = document.getElementById('locationFilter').value || '';
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        const val = (r.querySelector('select.location')?.value || '').trim();
+        r.dataset.locMatch = (lf === '' || val === lf) ? '1' : '0';
+        r.style.display = (r.dataset.searchMatch === '1' && (r.dataset.typeMatch ?? '1') === '1' && r.dataset.locMatch === '1') ? '' : 'none';
+      });
+    }
+
+
+    function recalcTotals() {
+      totalPhysical = 0;
+      totalMissing = 0;
+      document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+        const theoretical = parseInt(tr.dataset.theoretical || '0');
+        const physical = tr.querySelector('.physical-checkbox').checked ? 1 : 0;
+        const missing = Math.max(0, theoretical - physical);
+        tr.querySelector('.missing').innerText = missing;
+        tr.dataset.missing = String(missing);
+        totalPhysical += physical;
+        totalMissing += missing;
+      });
+      updateTotalsUI();
+    }
+
+    function updateTotalsUI() {
+      document.getElementById('sumPhysical').innerText = totalPhysical;
+      document.getElementById('sumMissing').innerText = totalMissing;
+    }
+
+    function applyMissingFilter() {
+    // Auto-save for Notes/Locations changes
+    document.addEventListener('input', (e) => {
+      if (e.target.classList.contains('notes')) {
+        saveStateDebounced();
+        hasUnsavedChanges = true;
+      }
+    });
+    document.addEventListener('change', (e) => {
+      if (e.target.matches('select.location')) {
+        saveStateDebounced();
+        hasUnsavedChanges = true;
+      }
+      if (e.target.id === 'addLocation' || e.target.getAttribute('data-remove')) {
+        saveStateDebounced();
+        hasUnsavedChanges = true;
+      }
+    });
+      const showMissing = document.getElementById('showMissingOnly').checked;
+      const tbody = document.querySelector('#stockTable tbody');
+      if (!tbody) return;
+      tbody.classList.toggle('missing-only', !!showMissing);
+      page = 1;
+      applyPagination();
+    }
+
+    // Persist/Load state
+    async function hydrateFromSavedState() {
+      try {
+        const res = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+        const data = await res.json();
+        if (data.error) return;
+        // load locations list first
+        setLocationsList(data.locations_list || []);
+        // First, merge global locations so row selects see the full list
+        try {
+          const gl = await (await fetch('/locations_data')).json();
+          const merged = Array.from(new Set([...(data.locations_list||[]), ...((gl.locations)||[])]));
+          setLocationsList(merged);
+          refreshRowLocationSelects(merged);
+        } catch {}
+        // Now set values per code
+        document.querySelectorAll('.physical-checkbox').forEach(chk => {
+          const code = chk.dataset.code;
+          const v = (data.physical_counts || {})[code] ? true : false;
+          if (!chk.disabled) chk.checked = v;
+        });
+        document.querySelectorAll('.notes').forEach(inp => {
+          const code = inp.dataset.code;
+          inp.value = (data.notes || {})[code] || '';
+        });
+        document.querySelectorAll('select.location').forEach(sel => {
+          const code = sel.dataset.code;
+          sel.value = (data.locations_map || {})[code] || '';
+
+        });
+        recalcTotals();
+        applyPagination();
+      } catch (e) { /* ignore */ }
+    }
+
+    // Locations list editing (simple in-memory, persisted via save)
+    function getLocationsList() {
+      const chip = document.getElementById('locationsChip');
+      const items = [...chip.querySelectorAll('span[data-loc]')].map(s => s.dataset.loc);
+      return items;
+    }
+    function setLocationsList(list) {
+      const chip = document.getElementById('locationsChip');
+      // Remove old tags
+      chip.querySelectorAll('span[data-loc]').forEach(n => n.remove());
+      (list || []).forEach(loc => {
+        const tag = document.createElement('span');
+        tag.className = 'chip';
+        tag.dataset.loc = loc;
+        tag.innerHTML = `${loc} <button title="Remove" data-remove="${loc}">×</button>`;
+        chip.insertBefore(tag, document.getElementById('addLocation'));
+      });
+      // Refresh selects
+      document.querySelectorAll('select.location').forEach(sel => {
+        const current = sel.value;
+
+
+
+        sel.innerHTML = '<option value="">—</option>' + (list||[]).map(l => `<option>${l}</option>`).join('');
+        sel.value = current || '';
+      });
+    }
+    document.getElementById('addLocation').addEventListener('click', () => {
+      const name = prompt('Add location name');
+      if (!name) return;
+      const list = getLocationsList();
+      if (!list.includes(name)) list.push(name);
+      setLocationsList(list);
+    });
+    document.getElementById('locationsChip').addEventListener('click', (e) => {
+      const loc = e.target.getAttribute('data-remove');
+      if (!loc) return;
+      const list = getLocationsList().filter(x => x !== loc);
+      setLocationsList(list);
+    });
+
+      // Always merge global locations into the in-page list (persist across dates)
+      (function(){
+        fetch('/locations_data').then(r=>r.json()).then(d => {
+          const base = (d.locations || []);
+          const cur = getLocationsList();
+          const merged = Array.from(new Set([...(base||[]), ...(cur||[])])).filter(Boolean);
+          setLocationsList(merged);
+        }).catch(()=>{});
+      })();
+
+
+    // Export CSV
+    function exportCsv() {
+      const rows = [['Camera Code','Cam Type','Delivery Date','Installed','Physical','Missing','Notes','Location']];
+      document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+        rows.push([
+          tr.children[0].innerText,
+          tr.children[1].innerText,
+          tr.children[2].innerText,
+          tr.children[3].innerText,
+          tr.querySelector('.physical-checkbox')?.checked ? '1' : '0',
+          tr.querySelector('.missing')?.innerText || '0',
+          tr.querySelector('.notes')?.value || '',
+          tr.querySelector('select.location')?.value || ''
+        ]);
+      });
+      const csv = rows.map(r => r.map(v => '"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'stock_export.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Bulk by location (re-added after hydrate fix)
+    function setByLocation(checked) {
+      const val = document.getElementById('bulkLocation').value;
+      if (!val) return;
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        const sel = r.querySelector('select.location');
+        if (!sel) return;
+        if ((sel.value || '') !== val) return;
+        const cb = r.querySelector('.physical-checkbox');
+        if (!cb || cb.disabled) return;
+        const prev = cb.checked;
+        cb.checked = !!checked;
+        if (prev !== cb.checked) {
+          const theoretical = parseInt(r.dataset.theoretical || '0');
+          const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
+          const physical = cb.checked ? 1 : 0;
+          const missing = Math.max(0, theoretical - physical);
+          r.querySelector('.missing').innerText = missing;
+          r.dataset.missing = String(missing);
+          totalPhysical += (cb.checked ? 1 : 0) - (prev ? 1 : 0);
+          totalMissing += (missing - wasMissing);
+          hasUnsavedChanges = true;
+        }
+      });
+      updateTotalsUI();
+      applyMissingFilter();
+      applyPagination();
+      renderCardsFromTable();
+    }
+    document.getElementById('tickByLocation').addEventListener('click', () => setByLocation(true));
+    document.getElementById('untickByLocation').addEventListener('click', () => setByLocation(false));
+
+    document.getElementById('exportCsv').addEventListener('click', exportCsv);
+    // Account + Users + Support + Logout buttons
+    (function(){
+      const b=document.getElementById('logoutBtn'); if(b){ b.addEventListener('click', ()=>{ window.location.href='/logout'; }); }
+      const u=document.getElementById('manageUsersBtn'); if(u){ u.addEventListener('click', ()=>{ window.location.href='/users/manage'; }); }
+      const a=document.getElementById('accountBtn'); if(a){ a.addEventListener('click', ()=>{ window.location.href='/account'; }); }
+      const s=document.getElementById('supportBtn'); if(s){ s.addEventListener('click', ()=>{ window.location.href='/support'; }); }
+      // Hide Users button for non-admins by probing /users (server still protects)
+      fetch('/users', {headers:{'Accept':'application/json'}}).then(r=>{
+        if (r.status===200) { u && (u.style.display=''); }
+      }).catch(()=>{});
+    })();
+
+    // View toggle (Table/Cards)
+    (function(){
+      const btnT = document.getElementById('viewTable');
+      const btnC = document.getElementById('viewCards');
+      const table = document.getElementById('stockTable');
+      const cards = document.getElementById('cardList');
+      function setView(v){
+        if (v === 'cards') {
+          btnC?.classList.add('active'); btnT?.classList.remove('active');
+          renderCardsFromTable();
+          cards.style.display='block';
+          table.style.display='none';
+        } else {
+          btnT?.classList.add('active'); btnC?.classList.remove('active');
+          table.style.display='';
+          cards.style.display='none';
+        }
+      }
+      btnT?.addEventListener('click', ()=> setView('table'));
+      btnC?.addEventListener('click', ()=> setView('cards'));
+      document.getElementById('cardsAllFiltered')?.addEventListener('change', ()=>{ if (btnC?.classList.contains('active')) renderCardsFromTable(); });
+      setView('table');
+    })();
+
+    // Bulk tick/untick ALL rows that match current filters (across all pages)
+    function setAllFilteredTicks(checked) {
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const typeVal = document.getElementById('typeFilter').value || '';
+      const locVal = document.getElementById('locationFilter').value || '';
+      const showMissing = document.getElementById('showMissingOnly').checked;
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        // Compute filter match independent of CSS display/pagination
+        const code = (r.children[0].innerText || '').toLowerCase();
+        const type = (r.children[1].innerText || '').trim();
+        const loc = (r.querySelector('select.location')?.value || '').trim();
+        let ok = true;
+        if (q) ok = ok && code.includes(q);
+        if (typeVal) ok = ok && type === typeVal;
+        if (locVal) ok = ok && loc === locVal;
+        if (showMissing) ok = ok && (parseInt(r.dataset.missing || '0') > 0);
+        if (!ok) return;
+        const cb = r.querySelector('.physical-checkbox');
+        if (!cb || cb.disabled) return;
+        const prev = cb.checked;
+        cb.checked = !!checked;
+        if (prev !== cb.checked) {
+          const theoretical = parseInt(r.dataset.theoretical || '0');
+          const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
+          const physical = cb.checked ? 1 : 0;
+          const missing = Math.max(0, theoretical - physical);
+          r.querySelector('.missing').innerText = missing;
+          r.dataset.missing = String(missing);
+          totalPhysical += (cb.checked ? 1 : 0) - (prev ? 1 : 0);
+          totalMissing += (missing - wasMissing);
+          hasUnsavedChanges = true;
+        }
+      });
+      updateTotalsUI();
+      applyMissingFilter();
+      applyPagination();
+    }
+
+    // Helper: return visible rows in viewport only
+    function getVisibleRowsInViewport() {
+      const tbody = document.querySelector('#stockTable tbody');
+      const rectT = tbody.getBoundingClientRect();
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      return rows.filter(r => {
+        if (r.style.display === 'none') return false;
+        const rr = r.getBoundingClientRect();
+        return rr.bottom >= rectT.top && rr.top <= rectT.bottom; // intersects viewport area
+      });
+    }
+
+    document.getElementById('tickVisible').addEventListener('click', () => {
+      if (confirm('Tick ALL rows that match current filters across ALL pages?')) {
+        setAllFilteredTicks(true);
+      }
+    });
+    document.getElementById('untickVisible').addEventListener('click', () => {
+      if (confirm('Untick ALL rows that match current filters across ALL pages?')) {
+        setAllFilteredTicks(false);
+      }
+    });
+
+    // Export PDF: build a printable Missing-only checklist
+    document.getElementById('exportPdf').addEventListener('click', () => {
+      try {
+        const dateStr = (document.getElementById('countDate')?.value) || '';
+        const rows = [];
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          const missing = parseInt(tr.dataset.missing || (tr.querySelector('.missing')?.innerText || '0')) || 0;
+          if (missing > 0) {
+            rows.push({
+              code: tr.children[0]?.innerText || '',
+              notes: tr.querySelector('.notes')?.value || '',
+              location: tr.querySelector('select.location')?.value || ''
+            });
+          }
+        });
+        const w = window.open('', 'printwin');
+        if (!w) { alert('Popup blocked. Please allow popups to export PDF.'); return; }
+        w.document.open();
+        w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
+          <title>stockcount</title>
+          <style>
+            :root { --text:#0b0b0b; }
+            @page { size: A4; margin: 12mm; }
+            body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: var(--text); }
+            h1 { margin: 0 0 6mm; font-size: 18pt; }
+            .meta { color:#555; margin-bottom: 6mm; }
+            .row { display:flex; align-items:center; gap: 6mm; border-bottom: 1px solid #ddd; padding: 1mm 0; }
+            .locCol { flex: 0 0 55mm; }
+            .code { flex: 0 0 55mm; display:flex; align-items:center; gap:4mm; }
+            .box { width: 5mm; height: 5mm; border: 1px solid #333; display:inline-block; }
+            .notes { flex: 1 1 auto; }
+            .fillbox { border: 1px solid #333; height: 5mm; padding: 0 1mm; font-size: 10pt; line-height: 5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .headerRow { display:flex; align-items:flex-end; gap: 6mm; border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .h-loc { flex: 0 0 55mm; font-weight: 600; font-size: 10pt; }
+            .h-mid { flex: 0 0 55mm; }
+            .h-notes { flex: 1 1 auto; font-weight: 600; font-size: 10pt; }
+            .val { font-size: 11pt; white-space: pre-wrap; }
+            .footer { margin-top: 6mm; font-size: 9pt; color:#666; }
+          </style>
+        </head><body>`);
+        w.document.write(`<h1>Stock Count${dateStr ? ' — ' + dateStr : ''}</h1>`);
+        w.document.write(`<div class="meta">Missing items only. Count and tick the box when physically present.</div>`);
+        w.document.write(`<div class="headerRow"><div class="h-loc">Location</div><div class="h-mid"></div><div class="h-notes">Note</div></div>`);
+        rows.forEach(r => {
+          const safe = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          w.document.write(`<div class="row">
+            <div class="locCol"><div class="fillbox">${safe(r.location)}</div></div>
+            <div class="code"><span class="val">${safe(r.code)}</span><span class="box"></span></div>
+            <div class="notes"><div class="fillbox">${safe(r.notes)}</div></div>
+          </div>`);
+        });
+        w.document.write(`<div class="footer">Generated by Camera Stock Control</div>`);
+        w.document.write(`</body></html>`);
+        w.document.close();
+        w.focus();
+        // Give the window a moment to render before printing
+        setTimeout(() => { try { w.print(); } catch(_) {} }, 50);
+      } catch (e) {
+        alert('Failed to build PDF: ' + e.message);
+      }
+    });
+
+    // Save and Close: saves state, then resets UI
+    document.getElementById('finishBtn').addEventListener('click', async () => {
+      try {
+        await saveStateNow();
+        hasUnsavedChanges = false;
+      } catch {}
+      document.getElementById('stockTable').style.display = 'none';
+      document.querySelector('#stockTable tbody').innerHTML = '';
+      document.getElementById('summary').style.display = 'none';
+      document.getElementById('anomalies').style.display = 'none';
+      document.getElementById('saveActions').style.display = 'none';
+      document.getElementById('controlsChip').style.display = 'none';
+      totalPhysical = 0; totalMissing = 0; updateTotalsUI();
+      statusEl.textContent = 'Stock List closed.';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Close: confirm if unsaved changes, then hide UI without saving
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      if (hasUnsavedChanges) {
+        const ok = confirm('You have unsaved changes. Close without saving?');
+        if (!ok) return;
+      }
+      document.getElementById('stockTable').style.display = 'none';
+      document.querySelector('#stockTable tbody').innerHTML = '';
+      document.getElementById('summary').style.display = 'none';
+      document.getElementById('anomalies').style.display = 'none';
+      document.getElementById('saveActions').style.display = 'none';
+      document.getElementById('controlsChip').style.display = 'none';
+      totalPhysical = 0; totalMissing = 0; updateTotalsUI();
+      statusEl.textContent = 'Stock List closed.';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+
+
+    function applySearch() {
+
+
+
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        const code = (r.children[0].innerText || '').toLowerCase();
+        r.dataset.searchMatch = code.includes(q) ? '1' : '0';
+        r.style.display = (r.dataset.searchMatch === '1' && (r.dataset.typeMatch ?? '1') === '1') ? '' : 'none';
+      });
+    }
+
+    function applyTypeFilter() {
+      const t = document.getElementById('typeFilter').value || '';
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        const type = (r.children[1].innerText || '').trim();
+
+
+        r.dataset.typeMatch = (t === '' || type === t) ? '1' : '0';
+        r.style.display = (r.dataset.typeMatch === '1' && (r.dataset.searchMatch ?? '1') === '1') ? '' : 'none';
+      });
+    }
+
+    // Simple sort: clicking on header toggles asc/desc
+    document.querySelectorAll('#stockTable th[data-col]').forEach((th, idx) => {
+      th.addEventListener('click', () => {
+        const tbody = document.querySelector('#stockTable tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const colIndex = th.cellIndex;
+        const asc = th.dataset.sort !== 'asc';
+        rows.sort((a,b) => {
+          const va = a.children[colIndex].innerText;
+
+    // Back to top chip (clean)
+    (function(){
+      const a = document.createElement('a');
+      a.href = '#'; a.textContent = '↑ Top';
+      a.className = 'chip';
+      a.style.position = 'fixed';
+      a.style.right = '16px';
+      a.style.bottom = '16px';
+      a.style.zIndex = 10;
+      document.body.appendChild(a);
+    })();
+          const vb = b.children[colIndex].innerText;
+          const na = parseFloat(va); const nb = parseFloat(vb);
+          if (!isNaN(na) && !isNaN(nb)) return asc ? na-nb : nb-na;
+          return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+        tbody.innerHTML = '';
+        rows.forEach(r => tbody.appendChild(r));
+        th.dataset.sort = asc ? 'asc' : 'desc';
+      });
+    });
+  </script>
+</body>
+</html>
+
