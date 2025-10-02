@@ -678,21 +678,13 @@ def process_stock_data(delivered_df: pd.DataFrame, installed_df: pd.DataFrame):
         d = delivered_counts.get(code, 0)
         i = installed_counts.get(code, 0)
         t = d - i
-        po_value = po_map.get(code)
-        
-        # Set default location for PO-0188 cameras
-        default_location = None
-        if po_value and str(po_value).strip().replace('-', '').replace(' ', '').upper() in ['PO0188', 'PO-0188']:
-            default_location = 'Aug 25 PO-0188'
-        
         theoretical_stock.append({
             'camera_code': code,
             'cam_type': cam_types.get(code),
             'delivery_date': delivery_dates.get(code),
             'installed': int(i),
-            'po': po_value,
-            'theoretical_stock': int(t),
-            'default_location': default_location
+            'po': po_map.get(code),
+            'theoretical_stock': int(t)
         })
         if d == 0 and i > 0:
             anomalies.append({
@@ -859,14 +851,12 @@ def save_physical_count():
         locations_list = data.get('locations_list', [])
         installed_map = data.get('installed_map', {})
         date = data.get('date')  # optional
-        theoretical_stock = data.get('theoretical_stock', [])
         payload = {
             'physical_counts': counts,
             'notes': notes,
             'locations_map': locations_map,
             'locations_list': locations_list,
             'installed_map': installed_map,
-            'theoretical_stock': theoretical_stock,
             'saved_at': datetime.now().isoformat(),
             'date': date,
         }
@@ -910,12 +900,5 @@ def list_count_dates():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("Starting Camera Stock Control server...")
-    print("Open http://localhost:5001 in your browser")
-    try:
-        app.run(debug=True, port=5001, host='localhost')
-    except Exception as e:
-        print(f"Error starting server: {e}")
-        print("Trying port 8000...")
-        app.run(debug=True, port=8000, host='localhost')
+    app.run(debug=True, host='0.0.0.0', port=5050)
 

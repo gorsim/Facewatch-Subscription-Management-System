@@ -329,6 +329,10 @@
       el.addEventListener('change', () => {
         if (!el.value) el.value = todayStr();
         localStorage.setItem('countDate', el.value);
+        // Clear cached data when date changes to force fresh load
+        theoreticalStockData = [];
+        installedName = null;
+        deliveredName = null;
         hydrateFromSavedState();
       });
       // Populate past dates
@@ -392,6 +396,8 @@
 
     // Global state for installed per code (from last Generate)
     let installedMap = {};
+    // Global state for theoretical stock data (from last Generate)
+    let theoreticalStockData = [];
 
     // Auto-save (debounced)
     let saveTimer = null;
@@ -408,7 +414,8 @@
         notes,
         locations_map,
         locations_list: getLocationsList(),
-        installed_map: installedMap || {}
+        installed_map: installedMap || {},
+        theoretical_stock: theoreticalStockData || []
       };
     }
     async function saveStateNow() {
@@ -511,7 +518,36 @@
       // Ensure results are generated for selected date (uses last uploaded files)
       async function ensureGenerated() {
         const table = document.getElementById('stockTable');
-        if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) return;
+        // Always check for saved data first, regardless of table state
+        try {
+          const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+          const saved = await savedRes.json();
+          
+          if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
+            // Use saved theoretical stock data for this specific date
+            const data = {
+              theoretical_stock: saved.theoretical_stock,
+              anomalies: [],
+              summary: {
+                total_delivered: saved.theoretical_stock.reduce((sum, item) => sum + (item.installed || 0) + (item.theoretical_stock || 0), 0),
+                total_installed: saved.theoretical_stock.reduce((sum, item) => sum + (item.installed || 0), 0),
+                total_theoretical_stock: saved.theoretical_stock.reduce((sum, item) => sum + (item.theoretical_stock || 0), 0)
+              }
+            };
+            await renderResults(data);
+            statusEl.textContent = 'Loaded historical data for ' + getSelectedDate() + '.';
+            return;
+          }
+        } catch (e) {
+          console.log('No saved data for ' + getSelectedDate() + ', checking for fresh generation');
+        }
+        
+        // If no saved data, check if we need to generate fresh data
+        if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
+          // Table has data but no saved data for this date - show message
+          statusEl.textContent = 'No historical data found for ' + getSelectedDate() + '. Please upload files and generate a new count.';
+          return;
+        }
         if (!deliveredName || !installedName) {
           try {
             const resp = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
@@ -524,14 +560,32 @@
         }
         if (!deliveredName || !installedName) return;
         try {
-          const res = await fetch('/generate_stock', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ delivered_file: deliveredName, installed_file: installedName })
-          });
-          const data = await res.json();
-          if (res.ok && !data.error) {
+          // For past counts, try to use saved theoretical stock data first
+          const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+          const saved = await savedRes.json();
+          
+          if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
+            // Use saved theoretical stock data - no need to regenerate
+            const data = {
+              theoretical_stock: saved.theoretical_stock,
+              anomalies: [],
+              summary: {
+                total_delivered: saved.theoretical_stock.reduce((sum, item) => sum + (item.installed || 0) + (item.theoretical_stock || 0), 0),
+                total_installed: saved.theoretical_stock.reduce((sum, item) => sum + (item.installed || 0), 0),
+                total_theoretical_stock: saved.theoretical_stock.reduce((sum, item) => sum + (item.theoretical_stock || 0), 0)
+              }
+            };
             await renderResults(data);
-            statusEl.textContent = 'Loaded past count.';
+            statusEl.textContent = 'Loaded past count (historical data).';
+          } else {
+            // No saved data - show empty state instead of using current files
+            const data = {
+              theoretical_stock: [],
+              anomalies: [],
+              summary: { total_delivered: 0, total_installed: 0, total_theoretical_stock: 0 }
+            };
+            await renderResults(data);
+            statusEl.textContent = 'No historical data found for ' + getSelectedDate() + '. Please generate a new count.';
           }
         } catch {}
       }
@@ -674,6 +728,9 @@
         // Include any locations already assigned in rows
         document.querySelectorAll('select.location').forEach(sel => {
           if (sel.value) values.add(sel.value);
+          // Also include default locations from data attributes
+          const defaultLoc = sel.dataset.defaultLocation;
+          if (defaultLoc) values.add(defaultLoc);
         });
         const fullList = Array.from(values);
         // Update filter and bulk dropdowns
@@ -704,7 +761,10 @@
       // Build installed map for auto-save payload and migration
       installedMap = {};
       data.theoretical_stock.forEach(row => { installedMap[row.camera_code] = row.installed || 0; });
+      // Store theoretical stock data for saving
+      theoreticalStockData = data.theoretical_stock || [];
       try { saved = await savedRes.json(); } catch {}
+      console.log('Using provided theoretical stock data');
       const locSet = new Set(['']);
       const savedList = (saved.locations_list || []);
       savedList.forEach(l => locSet.add(l));
@@ -732,7 +792,7 @@
           <td><input type="checkbox" class="physical-checkbox" data-code="${row.camera_code}" ${disabled ? 'disabled' : ''} /></td>
           <td class="missing">${missing}</td>
           <td><input type="text" class="notes" placeholder="Notes" data-code="${row.camera_code}" /></td>
-          <td>${locationSelect}</td>
+          <td><select class="location" data-code="${row.camera_code}" data-default-location="${row.default_location || ''}"></select></td>
         `;
         tbody.appendChild(tr);
       });
@@ -750,8 +810,11 @@
       });
       updateTotalsUI();
 
-      tbody.addEventListener('change', (e) => {
-        if (!e.target.classList.contains('physical-checkbox')) return;
+      // Only add event listener if not already added
+      if (!tbody.dataset.listenerAdded) {
+        tbody.dataset.listenerAdded = 'true';
+        tbody.addEventListener('change', (e) => {
+          if (!e.target.classList.contains('physical-checkbox')) return;
         const tr = e.target.closest('tr');
         const theoretical = parseInt(tr.dataset.theoretical || '0');
         const wasMissing = parseInt(tr.querySelector('.missing').innerText) || 0;
@@ -759,14 +822,14 @@
         const missing = Math.max(0, theoretical - physical);
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
-        totalPhysical += physical ? 1 : -1;
-        totalMissing += (missing - wasMissing);
-        updateTotalsUI();
-        applyMissingFilter();
-        saveStateDebounced();
-        hasUnsavedChanges = true;
-
-      });
+          totalPhysical += physical ? 1 : -1;
+          totalMissing += (missing - wasMissing);
+          tr.dataset.missing = String(missing);
+          updateTotalsUI();
+          saveStateDebounced();
+          hasUnsavedChanges = true;
+        });
+      }
 
       document.getElementById('sumDelivered').innerText = data.summary.total_delivered;
       document.getElementById('sumInstalled').innerText = data.summary.total_installed;
@@ -934,8 +997,9 @@ if (clearSearchBtn) {
         });
         document.querySelectorAll('select.location').forEach(sel => {
           const code = sel.dataset.code;
-          sel.value = (data.locations_map || {})[code] || '';
-
+          const savedLocation = (data.locations_map || {})[code] || '';
+          const defaultLocation = sel.dataset.defaultLocation || '';
+          sel.value = savedLocation || defaultLocation;
         });
         recalcTotals();
         applyPagination();
@@ -1159,11 +1223,21 @@ if (clearSearchBtn) {
           if (missing > 0) {
             rows.push({
               code: tr.children[0]?.innerText || '',
+              po: tr.children[2]?.innerText || '',
+              deliveryDate: tr.children[3]?.innerText || '',
               notes: tr.querySelector('.notes')?.value || '',
               location: tr.querySelector('select.location')?.value || ''
             });
           }
         });
+        
+        // Sort by camera code (lowest to highest)
+        rows.sort((a, b) => {
+          const codeA = a.code.toLowerCase();
+          const codeB = b.code.toLowerCase();
+          return codeA.localeCompare(codeB);
+        });
+        
         const w = window.open('', 'printwin');
         if (!w) { alert('Popup blocked. Please allow popups to export PDF.'); return; }
         w.document.open();
@@ -1175,15 +1249,19 @@ if (clearSearchBtn) {
             body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: var(--text); }
             h1 { margin: 0 0 6mm; font-size: 18pt; }
             .meta { color:#555; margin-bottom: 6mm; }
-            .row { display:flex; align-items:center; gap: 6mm; border-bottom: 1px solid #ddd; padding: 1mm 0; }
-            .locCol { flex: 0 0 55mm; }
-            .code { flex: 0 0 55mm; display:flex; align-items:center; gap:4mm; }
+            .row { display:flex; align-items:center; gap: 4mm; border-bottom: 1px solid #ddd; padding: 1mm 0; }
+            .locCol { flex: 0 0 45mm; }
+            .code { flex: 0 0 40mm; display:flex; align-items:center; gap:3mm; }
+            .po { flex: 0 0 25mm; font-size: 9pt; }
+            .date { flex: 0 0 25mm; font-size: 9pt; }
             .box { width: 5mm; height: 5mm; border: 1px solid #333; display:inline-block; }
             .notes { flex: 1 1 auto; }
             .fillbox { border: 1px solid #333; height: 5mm; padding: 0 1mm; font-size: 10pt; line-height: 5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .headerRow { display:flex; align-items:flex-end; gap: 6mm; border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
-            .h-loc { flex: 0 0 55mm; font-weight: 600; font-size: 10pt; }
-            .h-mid { flex: 0 0 55mm; }
+            .headerRow { display:flex; align-items:flex-end; gap: 4mm; border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .h-loc { flex: 0 0 45mm; font-weight: 600; font-size: 10pt; }
+            .h-code { flex: 0 0 40mm; font-weight: 600; font-size: 10pt; }
+            .h-po { flex: 0 0 25mm; font-weight: 600; font-size: 9pt; }
+            .h-date { flex: 0 0 25mm; font-weight: 600; font-size: 9pt; }
             .h-notes { flex: 1 1 auto; font-weight: 600; font-size: 10pt; }
             .val { font-size: 11pt; white-space: pre-wrap; }
             .footer { margin-top: 6mm; font-size: 9pt; color:#666; }
@@ -1191,12 +1269,14 @@ if (clearSearchBtn) {
         </head><body>`);
         w.document.write(`<h1>Stock Count${dateStr ? ' — ' + dateStr : ''}</h1>`);
         w.document.write(`<div class="meta">Missing items only. Count and tick the box when physically present.</div>`);
-        w.document.write(`<div class="headerRow"><div class="h-loc">Location</div><div class="h-mid"></div><div class="h-notes">Note</div></div>`);
+        w.document.write(`<div class="headerRow"><div class="h-loc">Location</div><div class="h-code">Camera Code</div><div class="h-po">PO</div><div class="h-date">Delivery</div><div class="h-notes">Note</div></div>`);
         rows.forEach(r => {
           const safe = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
           w.document.write(`<div class="row">
             <div class="locCol"><div class="fillbox">${safe(r.location)}</div></div>
             <div class="code"><span class="val">${safe(r.code)}</span><span class="box"></span></div>
+            <div class="po"><div class="fillbox">${safe(r.po)}</div></div>
+            <div class="date"><div class="fillbox">${safe(r.deliveryDate)}</div></div>
             <div class="notes"><div class="fillbox">${safe(r.notes)}</div></div>
           </div>`);
         });
@@ -1233,6 +1313,9 @@ if (clearSearchBtn) {
       if (hasUnsavedChanges) {
         const ok = confirm('You have unsaved changes. Close without saving?');
         if (!ok) return;
+        // Clear any pending auto-save timer to prevent saving after close
+        clearTimeout(saveTimer);
+        hasUnsavedChanges = false;
       }
       document.getElementById('stockTable').style.display = 'none';
       document.querySelector('#stockTable tbody').innerHTML = '';
