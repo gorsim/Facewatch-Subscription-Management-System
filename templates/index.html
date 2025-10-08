@@ -63,6 +63,13 @@
     }
     #stockTable tbody.missing-only tr[data-missing="0"] { display: none; }
     .pagination-hidden { display: none !important; }
+    /* Scanner overlay */
+    #scanOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 1000; color: #e5e7eb; }
+    #scanOverlay .inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    #scanHeader { display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; background: #0b1220; border-bottom: 1px solid #334155; }
+    #scanVideo { width: 100%; height: auto; flex: 1; background: black; }
+    #scanStatus { padding: 8px 12px; font-size: 14px; color: #94a3b8; }
+    .scan-hit { outline: 2px solid #22c55e; box-shadow: 0 0 0 2px #22c55e inset; }
   </style>
 </head>
 <body>
@@ -121,6 +128,7 @@
       <div class="actions">
         <button id="uploadBtn">Upload Files</button>
         <button id="generateBtn" class="secondary" disabled>GENERATE STOCK LIST</button>
+        <button id="scanBtn" class="secondary" title="Scan barcode/QR to find Camera Code">Scan</button>
         <div class="search">
           <span style="position:relative; display:inline-flex; align-items:center;">
             <input id="searchInput" type="text" placeholder="Filter by Camera Code" style="padding-right:28px;" />
@@ -455,6 +463,21 @@
 
     </div>
   </div>
+  <div id="scanOverlay" aria-hidden="true">
+    <div class="inner">
+      <div id="scanHeader">
+        <div>Scanner</div>
+        <div>
+          <button id="scanStopBtn" class="secondary">Stop</button>
+          <button id="scanCloseBtn" class="secondary">Close</button>
+        </div>
+      </div>
+      <video id="scanVideo" playsinline></video>
+      <div id="scanStatus">Grant camera permission to start scanning…</div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
+
   <script>
     let deliveredName = null;
       // Render Cards from current table rows (global scope)
@@ -522,7 +545,7 @@
         try {
           const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
           const saved = await savedRes.json();
-          
+
           if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
             // Use saved theoretical stock data for this specific date
             const data = {
@@ -541,7 +564,7 @@
         } catch (e) {
           console.log('No saved data for ' + getSelectedDate() + ', checking for fresh generation');
         }
-        
+
         // If no saved data, check if we need to generate fresh data
         if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
           // Table has data but no saved data for this date - show message
@@ -563,7 +586,7 @@
           // For past counts, try to use saved theoretical stock data first
           const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
           const saved = await savedRes.json();
-          
+
           if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
             // Use saved theoretical stock data - no need to regenerate
             const data = {
@@ -1127,6 +1150,115 @@ if (clearSearchBtn) {
       }).catch(()=>{});
     })();
 
+    // Barcode/QR Scanner
+    (function(){
+      const scanBtn = document.getElementById('scanBtn');
+      const overlay = document.getElementById('scanOverlay');
+      const videoEl = document.getElementById('scanVideo');
+      const closeBtn = document.getElementById('scanCloseBtn');
+      const stopBtn = document.getElementById('scanStopBtn');
+      const statusEl = document.getElementById('scanStatus');
+      let reader = null;
+      let scanning = false;
+      let lastText = '';
+
+      function showOverlay(show){
+        if (!overlay) return;
+        overlay.style.display = show ? 'block' : 'none';
+        overlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+      }
+
+      function parseCameraCode(raw){
+        const t = String(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+        const all = Array.from(t.matchAll(/CA[A-Z0-9]{4}/g)).map(m=>m[0]);
+        if (all.length) return all[all.length-1];
+        const tail = t.slice(-6);
+        if (/^CA[A-Z0-9]{4}$/.test(tail)) return tail;
+        return null;
+      }
+      function findRowByCode(code){
+        const rows = document.querySelectorAll('#stockTable tbody tr');
+        const target = (code||'').toUpperCase();
+        for (const r of rows){
+          const val = (r.children[0]?.innerText||'').trim().toUpperCase();
+          if (val === target) return r;
+        }
+        return null;
+      }
+      function jumpToRow(tr){
+        const tbody = document.querySelector('#stockTable tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const showMissing = document.getElementById('showMissingOnly')?.checked;
+        const visibleRows = rows.filter(r => {
+          const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
+          const matchType = (r.dataset.typeMatch ?? '1') === '1';
+          const matchLoc = (r.dataset.locMatch ?? '1') === '1';
+          const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
+          const inlineVisible = r.style.display !== 'none';
+          return matchSearch && matchType && matchLoc && matchMissing && inlineVisible;
+        });
+        const idx = visibleRows.indexOf(tr);
+        if (idx >= 0) {
+          page = Math.floor(idx / pageSize) + 1;
+          applyPagination();
+          tr.scrollIntoView({behavior:'smooth', block:'center'});
+        }
+      }
+      function markRow(tr){
+        const cb = tr.querySelector('.physical-checkbox');
+        if (cb && !cb.checked && !cb.disabled) {
+          const prev = cb.checked;
+          cb.checked = true;
+          if (prev !== cb.checked) cb.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+        tr.classList.add('scan-hit');
+        setTimeout(()=>tr.classList.remove('scan-hit'), 1200);
+        const cardsEl = document.getElementById('cardList');
+        if (cardsEl && cardsEl.style.display !== 'none') { renderCardsFromTable(); }
+        try { navigator.vibrate && navigator.vibrate(30); } catch(_) {}
+      }
+
+      async function startScan(){
+        if (!window.ZXingBrowser) { statusEl && (statusEl.textContent = 'Scanner library not loaded'); return; }
+        if (!reader) reader = new ZXingBrowser.BrowserMultiFormatReader();
+        scanning = true; lastText = '';
+        showOverlay(true);
+        statusEl && (statusEl.textContent = 'Starting camera…');
+        try {
+          await reader.decodeFromVideoDevice(null, videoEl, (result, err) => {
+            if (!scanning) return;
+            if (result) {
+              const text = result.getText();
+              if (!text || text === lastText) return;
+              lastText = text;
+              const code = parseCameraCode(text);
+              if (code) {
+                statusEl && (statusEl.textContent = 'Found ' + code);
+                const tr = findRowByCode(code);
+                if (tr) { jumpToRow(tr); markRow(tr); }
+                else { statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list'); }
+                setTimeout(()=>{ lastText=''; }, 800);
+              } else {
+                statusEl && (statusEl.textContent = 'Unrecognized format');
+                setTimeout(()=>{ lastText=''; }, 600);
+              }
+            }
+          });
+        } catch(e) {
+          statusEl && (statusEl.textContent = 'Camera permission denied or not available');
+        }
+      }
+      function stopScan(){
+        scanning = false;
+        try { reader && reader.reset(); } catch(_) {}
+        showOverlay(false);
+      }
+
+      scanBtn && scanBtn.addEventListener('click', startScan);
+      closeBtn && closeBtn.addEventListener('click', stopScan);
+      stopBtn && stopBtn.addEventListener('click', stopScan);
+    })();
+
     // View toggle (Table/Cards)
     (function(){
       const btnT = document.getElementById('viewTable');
@@ -1230,14 +1362,14 @@ if (clearSearchBtn) {
             });
           }
         });
-        
+
         // Sort by camera code (lowest to highest)
         rows.sort((a, b) => {
           const codeA = a.code.toLowerCase();
           const codeB = b.code.toLowerCase();
           return codeA.localeCompare(codeB);
         });
-        
+
         const w = window.open('', 'printwin');
         if (!w) { alert('Popup blocked. Please allow popups to export PDF.'); return; }
         w.document.open();
