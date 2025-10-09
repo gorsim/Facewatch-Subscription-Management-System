@@ -95,12 +95,6 @@
           <select id="dateHistory"><option value="">—</option></select>
           <button id="refreshDates" class="secondary" title="Refresh saved count dates">↻</button>
         </span>
-        <span class="chip" id="bringForwardWrap">
-          Bring forward from:
-          <select id="bringForwardDate"><option value="">—</option></select>
-          <button id="bringForwardBtn" class="secondary" title="Copy Locations & Notes into blanks only">Apply</button>
-        </span>
-
         <span class="chip" id="pageControls" style="display:none">
           <button id="prevPage">Prev</button>
           <span id="pageInfo" class="muted"></span>
@@ -384,7 +378,6 @@
           const opt = document.createElement('option');
           opt.value = chosen; opt.textContent = chosen; sel.appendChild(opt);
         }
-
         if (chosen) sel.value = chosen;
       } catch {}
     }
@@ -456,73 +449,6 @@
           window.location.href = `/locations?return=${encodeURIComponent(returnUrl)}`;
         });
       })();
-
-    // Bring-forward: populate dropdown and apply into blanks only (outside of refreshDateHistory)
-    (function(){
-      const sel = document.getElementById('bringForwardDate');
-      const btn = document.getElementById('bringForwardBtn');
-      async function populate() {
-        try {
-          const resp = await fetch('/list_count_dates');
-          const d = await resp.json();
-          const cur = document.getElementById('countDate')?.value;
-          const options = (d.dates||[]).map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
-          sel.innerHTML = '<option value="">—</option>' + options;
-        } catch {}
-      }
-      populate();
-      const refresh = document.getElementById('refreshDates');
-      if (refresh) refresh.addEventListener('click', populate);
-
-      async function bringForward(dateStr){
-        if (!dateStr) return;
-        try {
-          const res = await fetch('/load_physical_state?date=' + encodeURIComponent(dateStr));
-          const saved = await res.json();
-          const notesMap = saved.notes || {};
-          const locMap = saved.locations_map || {};
-          const list = saved.locations_list || [];
-          // Merge locations into current list so selects have the options
-          try {
-            const curList = (window.getLocationsList? getLocationsList() : []);
-            const merged = Array.from(new Set([...(curList||[]), ...(list||[])])).filter(Boolean);
-            if (window.setLocationsList) setLocationsList(merged);
-            if (window.refreshRowLocationSelects) refreshRowLocationSelects(merged);
-          } catch {}
-
-          let filledNotes = 0, filledLocs = 0;
-          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
-            const code = (tr.children[0]?.innerText || '').trim();
-            if (!code) return;
-            const noteVal = (notesMap[code] || '').trim();
-            const locVal = (locMap[code] || '').trim();
-            // Notes: fill only if current blank and saved has value
-            const noteEl = tr.querySelector('.notes');
-            if (noteEl && !noteEl.value && noteVal) { noteEl.value = noteVal; filledNotes++; }
-            // Location: fill only if current blank and saved has value
-            const selEl = tr.querySelector('select.location');
-            if (selEl && !selEl.value && locVal) { selEl.value = locVal; filledLocs++; }
-          });
-          // Update UI and persist
-          try { hasUnsavedChanges = true; } catch {}
-          try { renderCardsFromTable(); } catch {}
-          try { applyLocationFilter(); } catch {}
-          try { saveStateDebounced(); } catch {}
-          const s = document.getElementById('status');
-          if (s) s.textContent = `Brought forward ${filledLocs} locations and ${filledNotes} notes from ${dateStr}.`;
-        } catch (e) {
-          alert('Failed to bring forward: ' + (e.message || e));
-        }
-      }
-
-      if (btn) btn.addEventListener('click', () => {
-        const val = sel.value;
-        if (!val) { alert('Choose a past stock count date to bring forward from.'); return; }
-        if (!confirm(`Bring forward Locations & Notes from ${val} into BLANK fields only?`)) return;
-        bringForward(val);
-      });
-    })();
-
 
         }
       } catch(e) { /* ignore transient errors */ }
