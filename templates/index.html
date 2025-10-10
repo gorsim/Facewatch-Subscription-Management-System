@@ -443,85 +443,9 @@
         if (data && data.success) {
           statusEl.textContent = `Auto-saved (${new Date().toLocaleTimeString()})`;
           refreshDateHistory();
+          try { window.populateBringForwardDates && window.populateBringForwardDates(); } catch {}
           hasUnsavedChanges = false;
 
-      // Manage Locations navigation
-      (function(){
-        const btn = document.getElementById('manageLocationsBtn');
-        if (!btn) return;
-        btn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          const d = document.getElementById('countDate')?.value || todayStr();
-          const returnUrl = `${window.location.pathname}?date=${encodeURIComponent(d)}&refresh=1`;
-          window.location.href = `/locations?return=${encodeURIComponent(returnUrl)}`;
-        });
-      })();
-
-    // Bring-forward: populate dropdown and apply into blanks only (outside of refreshDateHistory)
-    (function(){
-      const sel = document.getElementById('bringForwardDate');
-      const btn = document.getElementById('bringForwardBtn');
-      async function populate() {
-        try {
-          const resp = await fetch('/list_count_dates');
-          const d = await resp.json();
-          const cur = document.getElementById('countDate')?.value;
-          const options = (d.dates||[]).map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
-          sel.innerHTML = '<option value="">—</option>' + options;
-        } catch {}
-      }
-      populate();
-      const refresh = document.getElementById('refreshDates');
-      if (refresh) refresh.addEventListener('click', populate);
-
-      async function bringForward(dateStr){
-        if (!dateStr) return;
-        try {
-          const res = await fetch('/load_physical_state?date=' + encodeURIComponent(dateStr));
-          const saved = await res.json();
-          const notesMap = saved.notes || {};
-          const locMap = saved.locations_map || {};
-          const list = saved.locations_list || [];
-          // Merge locations into current list so selects have the options
-          try {
-            const curList = (window.getLocationsList? getLocationsList() : []);
-            const merged = Array.from(new Set([...(curList||[]), ...(list||[])])).filter(Boolean);
-            if (window.setLocationsList) setLocationsList(merged);
-            if (window.refreshRowLocationSelects) refreshRowLocationSelects(merged);
-          } catch {}
-
-          let filledNotes = 0, filledLocs = 0;
-          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
-            const code = (tr.children[0]?.innerText || '').trim();
-            if (!code) return;
-            const noteVal = (notesMap[code] || '').trim();
-            const locVal = (locMap[code] || '').trim();
-            // Notes: fill only if current blank and saved has value
-            const noteEl = tr.querySelector('.notes');
-            if (noteEl && !noteEl.value && noteVal) { noteEl.value = noteVal; filledNotes++; }
-            // Location: fill only if current blank and saved has value
-            const selEl = tr.querySelector('select.location');
-            if (selEl && !selEl.value && locVal) { selEl.value = locVal; filledLocs++; }
-          });
-          // Update UI and persist
-          try { hasUnsavedChanges = true; } catch {}
-          try { renderCardsFromTable(); } catch {}
-          try { applyLocationFilter(); } catch {}
-          try { saveStateDebounced(); } catch {}
-          const s = document.getElementById('status');
-          if (s) s.textContent = `Brought forward ${filledLocs} locations and ${filledNotes} notes from ${dateStr}.`;
-        } catch (e) {
-          alert('Failed to bring forward: ' + (e.message || e));
-        }
-      }
-
-      if (btn) btn.addEventListener('click', () => {
-        const val = sel.value;
-        if (!val) { alert('Choose a past stock count date to bring forward from.'); return; }
-        if (!confirm(`Bring forward Locations & Notes from ${val} into BLANK fields only?`)) return;
-        bringForward(val);
-      });
-    })();
 
 
         }
@@ -610,6 +534,104 @@
     let installedName = null;
     let totalPhysical = 0;
     let totalMissing = 0;
+
+      // Manage Locations navigation
+      (function(){
+        const btn = document.getElementById('manageLocationsBtn');
+        if (!btn) return;
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const d = document.getElementById('countDate')?.value || todayStr();
+          const returnUrl = `${window.location.pathname}?date=${encodeURIComponent(d)}&refresh=1`;
+          window.location.href = `/locations?return=${encodeURIComponent(returnUrl)}`;
+        });
+      })();
+
+      // Bring-forward: populate dropdown and apply into blanks only
+      (function(){
+        const sel = document.getElementById('bringForwardDate');
+        const btn = document.getElementById('bringForwardBtn');
+        async function populate() {
+          try {
+            const resp = await fetch('/list_count_dates');
+            const d = await resp.json();
+            const cur = document.getElementById('countDate')?.value;
+            const dates = (d.dates||[]);
+            let options = dates.map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
+            // Ensure the currently viewed date appears (disabled) even if not saved yet
+            if (cur && !dates.includes(cur)) {
+              options += `\n<option disabled>${cur}</option>`;
+            }
+            sel.innerHTML = '<option value="">—</option>' + options;
+          } catch(e) {
+            // Fallback: mirror from Past counts dropdown if available
+            try {
+              const hist = document.getElementById('dateHistory');
+              const cur = document.getElementById('countDate')?.value;
+              if (hist && hist.options && hist.options.length) {
+                const items = Array.from(hist.options).map(o=>o.value).filter(Boolean);
+                let options = items.map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
+                if (cur && !items.includes(cur)) options += `\n<option disabled>${cur}</option>`;
+                sel.innerHTML = '<option value="">—</option>' + options;
+              }
+            } catch {}
+          }
+        }
+        // Expose for other code (after save)
+        window.populateBringForwardDates = populate;
+        populate();
+        const refresh = document.getElementById('refreshDates');
+        if (refresh) refresh.addEventListener('click', populate);
+
+        async function bringForward(dateStr){
+          if (!dateStr) return;
+          try {
+            const res = await fetch('/load_physical_state?date=' + encodeURIComponent(dateStr));
+            const saved = await res.json();
+            const notesMap = saved.notes || {};
+            const locMap = saved.locations_map || {};
+            const list = saved.locations_list || [];
+            // Merge locations into current list so selects have the options
+            try {
+              const curList = (window.getLocationsList? getLocationsList() : []);
+              const merged = Array.from(new Set([...(curList||[]), ...(list||[])])).filter(Boolean);
+              if (window.setLocationsList) setLocationsList(merged);
+              if (window.refreshRowLocationSelects) refreshRowLocationSelects(merged);
+            } catch {}
+
+            let filledNotes = 0, filledLocs = 0;
+            document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+              const code = (tr.children[0]?.innerText || '').trim();
+              if (!code) return;
+              const noteVal = (notesMap[code] || '').trim();
+              const locVal = (locMap[code] || '').trim();
+              // Notes: fill only if current blank and saved has value
+              const noteEl = tr.querySelector('.notes');
+              if (noteEl && !noteEl.value && noteVal) { noteEl.value = noteVal; filledNotes++; }
+              // Location: fill only if current blank and saved has value
+              const selEl = tr.querySelector('select.location');
+              if (selEl && !selEl.value && locVal) { selEl.value = locVal; filledLocs++; }
+            });
+            // Update UI and persist
+            try { hasUnsavedChanges = true; } catch {}
+            try { renderCardsFromTable(); } catch {}
+            try { applyLocationFilter(); } catch {}
+            try { saveStateDebounced(); } catch {}
+            const s = document.getElementById('status');
+            if (s) s.textContent = `Brought forward ${filledLocs} locations and ${filledNotes} notes from ${dateStr}.`;
+          } catch (e) {
+            alert('Failed to bring forward: ' + (e.message || e));
+          }
+        }
+
+        if (btn) btn.addEventListener('click', () => {
+          const val = sel.value;
+          if (!val) { alert('Choose a past stock count date to bring forward from.'); return; }
+          if (!confirm(`Bring forward Locations & Notes from ${val} into BLANK fields only?`)) return;
+          bringForward(val);
+        });
+      })();
+
 
 
       // Ensure results are generated for selected date (uses last uploaded files)

@@ -897,15 +897,45 @@ def save_physical_count():
 def list_count_dates():
     try:
         files = os.listdir(app.config['UPLOAD_FOLDER'])
-        dates = []
+        dates = set()
         for name in files:
             if name.startswith('physical_state_') and name.endswith('.json'):
                 mid = name[len('physical_state_'):-len('.json')]
-                # Skip timestamped backups (YYYYMMDD_HHMMSS) by pattern; only keep YYYY-MM-DD
+                # Include files named by date YYYY-MM-DD
                 if re.fullmatch(r'\d{4}-\d{2}-\d{2}', mid):
-                    dates.append(mid)
-        dates = sorted(set(dates))
-        return jsonify({'dates': dates})
+                    dates.add(mid)
+                # Also scan timestamped backups YYYYMMDD_HHMMSS for embedded 'date' field
+                elif re.fullmatch(r'\d{8}_\d{6}', mid):
+                    try:
+                        with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
+                            j = json.load(f)
+                        d = j.get('date')
+                        if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+                            dates.add(d)
+                    except Exception:
+                        pass
+                # Include stable file 'physical_state.json' if it exists and has a valid date
+                elif mid == '':
+                    try:
+                        with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
+                            j = json.load(f)
+                        d = j.get('date')
+                        if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+                            dates.add(d)
+                    except Exception:
+                        pass
+        # Also include the stable file if present
+        try:
+            stable_path = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
+            if os.path.exists(stable_path):
+                with open(stable_path, 'r') as f:
+                    j = json.load(f)
+                d = j.get('date')
+                if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+                    dates.add(d)
+        except Exception:
+            pass
+        return jsonify({'dates': sorted(dates)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
