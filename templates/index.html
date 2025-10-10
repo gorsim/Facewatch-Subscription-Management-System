@@ -619,6 +619,7 @@
             try { saveStateDebounced(); } catch {}
             const s = document.getElementById('status');
             if (s) s.textContent = `Brought forward ${filledLocs} locations and ${filledNotes} notes from ${dateStr}.`;
+            alert('Notes and Locations added for blank fields');
           } catch (e) {
             alert('Failed to bring forward: ' + (e.message || e));
           }

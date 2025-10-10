@@ -23,6 +23,134 @@ AUTH_USERNAME = os.environ.get('AUTH_USERNAME', 'admin')
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', 'admin')
 
 
+# --- Optional S3 storage config ---
+USE_S3 = os.environ.get('USE_S3', os.environ.get('S3_BUCKET', '')) != ''
+S3_BUCKET = os.environ.get('S3_BUCKET', '')
+S3_REGION = os.environ.get('S3_REGION', 'eu-west-2')
+S3_PREFIX = os.environ.get('S3_PREFIX', 'uploads/')  # keep keys under uploads/
+
+_s3_client = None
+
+def _get_s3():
+    global _s3_client
+    if _s3_client is not None:
+        return _s3_client
+    if not USE_S3:
+        return None
+    try:
+        import boto3  # type: ignore
+        _s3_client = boto3.client('s3', region_name=S3_REGION)
+        return _s3_client
+    except Exception as e:
+        # If S3 requested but boto3 missing or misconfigured, fall back to local with a log
+        print('S3 disabled due to error:', e)
+        return None
+
+def _s3_key(name: str) -> str:
+    # normalize to uploads/<name>
+    prefix = S3_PREFIX or ''
+    if prefix and not prefix.endswith('/'):
+        prefix2 = prefix + '/'
+    else:
+        prefix2 = prefix
+    return f"{prefix2}{name.lstrip('/')}"
+
+def storage_exists(name: str) -> bool:
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        try:
+            s3.head_object(Bucket=S3_BUCKET, Key=_s3_key(name))
+            return True
+        except Exception:
+            return False
+    # local
+    return os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], name))
+
+def storage_read_json(name: str, default=None):
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        try:
+            obj = s3.get_object(Bucket=S3_BUCKET, Key=_s3_key(name))
+            data = obj['Body'].read()
+            return json.loads(data)
+        except Exception:
+            return default
+    # local
+    try:
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def storage_write_json(name: str, data_obj):
+    payload = json.dumps(data_obj, indent=2).encode('utf-8')
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        s3.put_object(Bucket=S3_BUCKET, Key=_s3_key(name), Body=payload, ContentType='application/json')
+        return True
+    # local
+    path = os.path.join(app.config['UPLOAD_FOLDER'], name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        f.write(payload)
+    return True
+
+def storage_list(prefix: str = ''):
+    # returns list of names (relative to uploads/)
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        names = []
+        kw = {'Bucket': S3_BUCKET, 'Prefix': _s3_key(prefix)}
+        while True:
+            resp = s3.list_objects_v2(**kw)
+            for it in resp.get('Contents', []) or []:
+                key = it['Key']
+                # strip S3_PREFIX
+                if S3_PREFIX and key.startswith(S3_PREFIX):
+                    names.append(key[len(S3_PREFIX):])
+                else:
+                    names.append(key)
+            if resp.get('IsTruncated'):
+                kw['ContinuationToken'] = resp.get('NextContinuationToken')
+            else:
+                break
+        return names
+    # local
+    base = app.config['UPLOAD_FOLDER']
+    try:
+        return os.listdir(base)
+    except Exception:
+        return []
+
+# --- File helpers for CSVs ---
+from io import BytesIO
+
+def storage_save_filestorage(name: str, fs):
+    """Save an uploaded FileStorage under uploads/ name into S3 or local."""
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        bio = BytesIO()
+        fs.save(bio)
+        bio.seek(0)
+        s3.upload_fileobj(bio, S3_BUCKET, _s3_key(name), ExtraArgs={'ContentType': 'text/csv'})
+        return True
+    # local
+    dest = os.path.join(app.config['UPLOAD_FOLDER'], name)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    fs.save(dest)
+    return True
+
+def storage_download_to_local(name: str) -> str:
+    """Ensure a local path exists for the given uploads/ name and return it."""
+    local_path = os.path.join(app.config['UPLOAD_FOLDER'], f"_cache_{os.path.basename(name)}")
+    if USE_S3 and _get_s3():
+        s3 = _get_s3()
+        s3.download_file(S3_BUCKET, _s3_key(name), local_path)
+    # if local, caller can build its own path
+    return local_path
+
+
+
 def is_api_request():
     try:
         # Treat JSON endpoints and data-modifying routes as API requests
@@ -286,29 +414,26 @@ def locations_data():
     try:
 # Add simple Account button to header handled in templates/index.html (already wired)
 
-        path = os.path.join(app.config['UPLOAD_FOLDER'], 'locations.json')
         if request.method == 'GET':
             # If a global locations file exists, treat it as authoritative
             try:
-                if os.path.exists(path):
-                    with open(path, 'r') as f:
-                        data = json.load(f)
-                    if isinstance(data, dict) and 'locations' in data:
-                        locs = [v.strip() for v in (data.get('locations') or []) if isinstance(v, str) and v.strip()]
-                        return jsonify({'locations': sorted(set(locs), key=lambda x: x.lower())})
-                    if isinstance(data, list):
-                        locs = [v.strip() for v in data if isinstance(v, str) and v.strip()]
-                        return jsonify({'locations': sorted(set(locs), key=lambda x: x.lower())})
+                data = storage_read_json('locations.json', default=None)
+                if isinstance(data, dict) and 'locations' in data:
+                    locs = [v.strip() for v in (data.get('locations') or []) if isinstance(v, str) and v.strip()]
+                    return jsonify({'locations': sorted(set(locs), key=lambda x: x.lower())})
+                if isinstance(data, list):
+                    locs = [v.strip() for v in data if isinstance(v, str) and v.strip()]
+                    return jsonify({'locations': sorted(set(locs), key=lambda x: x.lower())})
                 # Otherwise, aggregate from existing per-date saved states as a seed
                 locs_seed = set()
-                for name in os.listdir(app.config['UPLOAD_FOLDER']):
+                for name in storage_list(''):
                     if name.startswith('physical_state_') and name.endswith('.json'):
                         try:
-                            with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
-                                j = json.load(f)
-                            for v in (j.get('locations_list') or []):
-                                if isinstance(v, str) and v.strip():
-                                    locs_seed.add(v.strip())
+                            j = storage_read_json(name, default=None)
+                            if isinstance(j, dict):
+                                for v in (j.get('locations_list') or []):
+                                    if isinstance(v, str) and v.strip():
+                                        locs_seed.add(v.strip())
                         except Exception:
                             continue
                 return jsonify({'locations': sorted(locs_seed, key=lambda x: x.lower())})
@@ -336,8 +461,7 @@ def locations_data():
             seen.add(k)
             uniq.append(v)
         uniq.sort(key=lambda x: x.lower())
-        with open(path, 'w') as f:
-            json.dump({'locations': uniq}, f, indent=2)
+        storage_write_json('locations.json', {'locations': uniq})
         return jsonify({'success': True, 'locations': uniq})
 
 
@@ -395,26 +519,23 @@ def upload_count_csv():
         def union_locations():
             locs = set()
             try:
-                p = os.path.join(app.config['UPLOAD_FOLDER'], 'locations.json')
-                if os.path.exists(p):
-                    with open(p, 'r') as fh:
-                        data = json.load(fh)
-                    if isinstance(data, dict):
-                        for v in (data.get('locations') or []):
-                            if isinstance(v, str) and v.strip():
-                                locs.add(v.strip())
-                    elif isinstance(data, list):
-                        for v in data:
-                            if isinstance(v, str) and v.strip():
-                                locs.add(v.strip())
-                for name in os.listdir(app.config['UPLOAD_FOLDER']):
+                data = storage_read_json('locations.json', default=None)
+                if isinstance(data, dict):
+                    for v in (data.get('locations') or []):
+                        if isinstance(v, str) and v.strip():
+                            locs.add(v.strip())
+                elif isinstance(data, list):
+                    for v in data:
+                        if isinstance(v, str) and v.strip():
+                            locs.add(v.strip())
+                for name in storage_list(''):
                     if name.startswith('physical_state_') and name.endswith('.json'):
                         try:
-                            with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as fh:
-                                j = json.load(fh)
-                            for v in (j.get('locations_list') or []):
-                                if isinstance(v, str) and v.strip():
-                                    locs.add(v.strip())
+                            j = storage_read_json(name, default=None)
+                            if isinstance(j, dict):
+                                for v in (j.get('locations_list') or []):
+                                    if isinstance(v, str) and v.strip():
+                                        locs.add(v.strip())
                         except Exception:
                             continue
             except Exception:
@@ -442,15 +563,8 @@ def upload_count_csv():
             return s
 
         # Load existing saved state for this date
-        dated_path = os.path.join(app.config['UPLOAD_FOLDER'], f'physical_state_{date}.json')
-        if os.path.exists(dated_path):
-            try:
-                with open(dated_path, 'r') as fh:
-                    saved = json.load(fh)
-            except Exception:
-                saved = {}
-        else:
-            saved = {}
+        name = f'physical_state_{date}.json'
+        saved = storage_read_json(name, default={}) or {}
         physical_counts = saved.get('physical_counts', {})
         notes = saved.get('notes', {})
         locations_map = saved.get('locations_map', {})
@@ -484,20 +598,17 @@ def upload_count_csv():
                     if add_unknown:
                         # Add to global locations and to this date's list
                         try:
-                            global_path = os.path.join(app.config['UPLOAD_FOLDER'], 'locations.json')
-                            existing = []
-                            if os.path.exists(global_path):
-                                with open(global_path, 'r') as fh:
-                                    data_g = json.load(fh)
-                                if isinstance(data_g, dict):
-                                    existing = list(data_g.get('locations') or [])
-                                elif isinstance(data_g, list):
-                                    existing = list(data_g)
+                            existing_data = storage_read_json('locations.json', default=[])
+                            if isinstance(existing_data, dict):
+                                existing = list(existing_data.get('locations') or [])
+                            elif isinstance(existing_data, list):
+                                existing = list(existing_data)
+                            else:
+                                existing = []
                             if v not in existing:
                                 existing.append(v)
                                 existing = sorted(set(existing), key=lambda x: x.lower())
-                                with open(global_path, 'w') as fh:
-                                    json.dump({'locations': existing}, fh, indent=2)
+                                storage_write_json('locations.json', {'locations': existing})
                             known_locations.add(v)
                             if v not in locations_list:
                                 locations_list.append(v)
@@ -527,14 +638,10 @@ def upload_count_csv():
             'date': date,
         }
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup = os.path.join(app.config['UPLOAD_FOLDER'], f'physical_state_{ts}.json')
-        with open(backup, 'w') as fh:
-            json.dump(payload, fh, indent=2)
-        with open(dated_path, 'w') as fh:
-            json.dump(payload, fh, indent=2)
-        stable = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
-        with open(stable, 'w') as fh:
-            json.dump(payload, fh, indent=2)
+        backup_name = f'physical_state_{ts}.json'
+        storage_write_json(backup_name, payload)
+        storage_write_json(f'physical_state_{date}.json', payload)
+        storage_write_json('physical_state.json', payload)
 
         return jsonify({'success': True, 'updated': updated, 'errors': errors})
     except Exception as e:
@@ -561,11 +668,9 @@ def upload_files():
         delivered_filename = secure_filename(delivered_file.filename)
         installed_filename = secure_filename(installed_file.filename)
 
-        delivered_path = os.path.join(app.config['UPLOAD_FOLDER'], delivered_filename)
-        installed_path = os.path.join(app.config['UPLOAD_FOLDER'], installed_filename)
-
-        delivered_file.save(delivered_path)
-        installed_file.save(installed_path)
+        # Save to S3 or local uploads/
+        storage_save_filestorage(delivered_filename, delivered_file)
+        storage_save_filestorage(installed_filename, installed_file)
 
         # Persist last uploaded filenames for future sessions (used to auto-generate after refresh)
         try:
@@ -574,8 +679,7 @@ def upload_files():
                 'installed_file': installed_filename,
                 'saved_at': datetime.now().isoformat()
             }
-            with open(os.path.join(app.config['UPLOAD_FOLDER'], 'last_upload.json'), 'w') as f:
-                json.dump(last_upload, f, indent=2)
+            storage_write_json('last_upload.json', last_upload)
         except Exception:
             pass
 
@@ -598,11 +702,15 @@ def generate_stock():
         if not delivered_file or not installed_file:
             return jsonify({'error': 'File names are required'}), 400
 
-        delivered_path = os.path.join(app.config['UPLOAD_FOLDER'], delivered_file)
-        installed_path = os.path.join(app.config['UPLOAD_FOLDER'], installed_file)
+        if USE_S3 and _get_s3():
+            delivered_local = storage_download_to_local(delivered_file)
+            installed_local = storage_download_to_local(installed_file)
+        else:
+            delivered_local = os.path.join(app.config['UPLOAD_FOLDER'], delivered_file)
+            installed_local = os.path.join(app.config['UPLOAD_FOLDER'], installed_file)
 
-        delivered_df = read_csv_flex(delivered_path)
-        installed_df = read_csv_flex(installed_path)
+        delivered_df = read_csv_flex(delivered_local)
+        installed_df = read_csv_flex(installed_local)
 
         result = process_stock_data(delivered_df, installed_df)
         return jsonify(result)
@@ -679,12 +787,12 @@ def process_stock_data(delivered_df: pd.DataFrame, installed_df: pd.DataFrame):
         i = installed_counts.get(code, 0)
         t = d - i
         po_value = po_map.get(code)
-        
+
         # Set default location for PO-0188 cameras
         default_location = None
         if po_value and str(po_value).strip().replace('-', '').replace(' ', '').upper() in ['PO0188', 'PO-0188']:
             default_location = 'Aug 25 PO-0188'
-        
+
         theoretical_stock.append({
             'camera_code': code,
             'cam_type': cam_types.get(code),
@@ -815,10 +923,8 @@ def load_physical_state():
         def last_upload_info():
             info = {}
             try:
-                p = os.path.join(app.config['UPLOAD_FOLDER'], 'last_upload.json')
-                if os.path.exists(p):
-                    with open(p, 'r') as f:
-                        j = json.load(f)
+                j = storage_read_json('last_upload.json', default=None)
+                if isinstance(j, dict):
                     info['last_delivered_file'] = j.get('delivered_file')
                     info['last_installed_file'] = j.get('installed_file')
             except Exception:
@@ -826,10 +932,9 @@ def load_physical_state():
             return info
 
         if date:
-            dated = os.path.join(app.config['UPLOAD_FOLDER'], f'physical_state_{date}.json')
-            if os.path.exists(dated):
-                with open(dated, 'r') as f:
-                    data = json.load(f)
+            name = f'physical_state_{date}.json'
+            if storage_exists(name):
+                data = storage_read_json(name, default={}) or {}
                 data.update(last_upload_info())
                 return jsonify(data)
             else:
@@ -837,13 +942,11 @@ def load_physical_state():
                 base.update(last_upload_info())
                 return jsonify(base)
         # Legacy behavior: stable file
-        stable = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
-        if not os.path.exists(stable):
+        if not storage_exists('physical_state.json'):
             base = {'physical_counts': {}, 'notes': {}, 'locations_map': {}, 'locations_list': []}
             base.update(last_upload_info())
             return jsonify(base)
-        with open(stable, 'r') as f:
-            data = json.load(f)
+        data = storage_read_json('physical_state.json', default={}) or {}
         data.update(last_upload_info())
         return jsonify(data)
     except Exception as e:
@@ -872,31 +975,25 @@ def save_physical_count():
         }
         # Write a timestamped backup and a stable file for reloads
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup = os.path.join(app.config['UPLOAD_FOLDER'], f'physical_state_{ts}.json')
-        with open(backup, 'w') as f:
-            json.dump(payload, f, indent=2)
+        backup_name = f'physical_state_{ts}.json'
+        storage_write_json(backup_name, payload)
         # If a date is provided, also write a dated file
         if date:
-            dated = os.path.join(app.config['UPLOAD_FOLDER'], f'physical_state_{date}.json')
-            with open(dated, 'w') as f:
-                json.dump(payload, f, indent=2)
+            dated_name = f'physical_state_{date}.json'
+            storage_write_json(dated_name, payload)
             # Update stable pointer to latest saved
-            stable = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
-            with open(stable, 'w') as f:
-                json.dump(payload, f, indent=2)
+            storage_write_json('physical_state.json', payload)
         else:
             # No date provided: keep stable behavior
-            stable = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
-            with open(stable, 'w') as f:
-                json.dump(payload, f, indent=2)
-        return jsonify({'success': True, 'filename': os.path.basename(backup)})
+            storage_write_json('physical_state.json', payload)
+        return jsonify({'success': True, 'filename': backup_name})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/list_count_dates', methods=['GET'])
 def list_count_dates():
     try:
-        files = os.listdir(app.config['UPLOAD_FOLDER'])
+        files = storage_list('')
         dates = set()
         for name in files:
             if name.startswith('physical_state_') and name.endswith('.json'):
@@ -907,32 +1004,18 @@ def list_count_dates():
                 # Also scan timestamped backups YYYYMMDD_HHMMSS for embedded 'date' field
                 elif re.fullmatch(r'\d{8}_\d{6}', mid):
                     try:
-                        with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
-                            j = json.load(f)
-                        d = j.get('date')
-                        if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
-                            dates.add(d)
-                    except Exception:
-                        pass
-                # Include stable file 'physical_state.json' if it exists and has a valid date
-                elif mid == '':
-                    try:
-                        with open(os.path.join(app.config['UPLOAD_FOLDER'], name), 'r') as f:
-                            j = json.load(f)
-                        d = j.get('date')
+                        j = storage_read_json(name, default=None)
+                        d = (j or {}).get('date') if isinstance(j, dict) else None
                         if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
                             dates.add(d)
                     except Exception:
                         pass
         # Also include the stable file if present
         try:
-            stable_path = os.path.join(app.config['UPLOAD_FOLDER'], 'physical_state.json')
-            if os.path.exists(stable_path):
-                with open(stable_path, 'r') as f:
-                    j = json.load(f)
-                d = j.get('date')
-                if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
-                    dates.add(d)
+            j = storage_read_json('physical_state.json', default=None)
+            d = (j or {}).get('date') if isinstance(j, dict) else None
+            if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+                dates.add(d)
         except Exception:
             pass
         return jsonify({'dates': sorted(dates)})
@@ -943,7 +1026,7 @@ if __name__ == '__main__':
     print("Starting Camera Stock Control server...")
     print("Open http://localhost:5001 in your browser")
     try:
-        app.run(debug=True, port=5001, host='localhost')
+        app.run(debug=True, port=5000, host='localhost')
     except Exception as e:
         print(f"Error starting server: {e}")
         print("Trying port 8000...")
