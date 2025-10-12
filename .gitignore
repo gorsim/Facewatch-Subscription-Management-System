@@ -13,12 +13,8 @@ ENV/
 .DS_Store
 
 # Uploaded/runtime data
-uploads/*.csv
-uploads/*.json
+uploads/
 !uploads/.gitkeep
-
-# Users store
-uploads/users.json
 
 # Logs
 *.log
