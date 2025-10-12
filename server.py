@@ -212,13 +212,12 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 # --- Simple file-backed users store ---
-USERS_FILE = os.path.join(app.config['UPLOAD_FOLDER'], 'users.json')
+USERS_FILE = 'users.json'  # Now stored in S3 or uploads/ via storage functions
 
 def load_users():
     try:
-        if os.path.exists(USERS_FILE):
-            with open(USERS_FILE, 'r') as f:
-                data = json.load(f)
+        data = storage_read_json(USERS_FILE, default=None)
+        if data is not None:
             if isinstance(data, dict) and 'users' in data:
                 return data['users']
             if isinstance(data, list):
@@ -230,8 +229,7 @@ def load_users():
 
 
 def save_users(users):
-    with open(USERS_FILE, 'w') as f:
-        json.dump({'users': users}, f, indent=2)
+    storage_write_json(USERS_FILE, {'users': users})
 
 
 def get_user(username):
@@ -281,7 +279,7 @@ def users_api():
         safe = [{'username': u.get('username'), 'role': u.get('role','user')} for u in users]
         # If no users file exists yet and env seeded, write it now
         try:
-            if not os.path.exists(USERS_FILE):
+            if not storage_exists(USERS_FILE):
                 save_users(users)
         except Exception:
             pass
