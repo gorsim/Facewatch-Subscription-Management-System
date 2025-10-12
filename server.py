@@ -149,6 +149,53 @@ def storage_download_to_local(name: str) -> str:
     # if local, caller can build its own path
     return local_path
 
+# --- Dates index and caching to speed up /list_count_dates ---
+from time import time as _now
+DATES_INDEX_FILE = 'dates_index.json'
+_DATES_CACHE = {'ts': 0.0, 'value': []}
+_DATES_CACHE_TTL = 30.0  # seconds
+
+def _get_dates_index_cached():
+    try:
+        if _DATES_CACHE['value'] and (_now() - _DATES_CACHE['ts'] < _DATES_CACHE_TTL):
+            return list(_DATES_CACHE['value'])
+        data = storage_read_json(DATES_INDEX_FILE, default=None)
+        arr = []
+        if isinstance(data, dict):
+            arr = list(data.get('dates') or [])
+        elif isinstance(data, list):
+            arr = list(data)
+        arr = sorted(set([d for d in arr if isinstance(d, str)]))
+        _DATES_CACHE['value'] = arr
+        _DATES_CACHE['ts'] = _now()
+        return list(arr)
+    except Exception:
+        return []
+
+def _set_dates_index(dates_list):
+    try:
+        arr = sorted(set([d for d in (dates_list or []) if isinstance(d, str)]))
+        storage_write_json(DATES_INDEX_FILE, {'dates': arr})
+        _DATES_CACHE['value'] = arr
+        _DATES_CACHE['ts'] = _now()
+        return arr
+    except Exception:
+        return dates_list or []
+
+def _add_date_to_index(date_str):
+    try:
+        if not isinstance(date_str, str):
+            return
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date_str):
+            return
+        arr = _get_dates_index_cached()
+        if date_str in arr:
+            return
+        arr.append(date_str)
+        _set_dates_index(arr)
+    except Exception:
+        pass
+
 
 
 def is_api_request():
@@ -981,6 +1028,10 @@ def save_physical_count():
             storage_write_json(dated_name, payload)
             # Update stable pointer to latest saved
             storage_write_json('physical_state.json', payload)
+            try:
+                _add_date_to_index(date)
+            except Exception:
+                pass
         else:
             # No date provided: keep stable behavior
             storage_write_json('physical_state.json', payload)
@@ -991,24 +1042,19 @@ def save_physical_count():
 @app.route('/list_count_dates', methods=['GET'])
 def list_count_dates():
     try:
-        files = storage_list('')
+        # Use cached index first
+        cached = _get_dates_index_cached()
+        if cached:
+            return jsonify({'dates': cached})
+        # Build minimal list without fetching each backup file
+        files = storage_list('physical_state_')
         dates = set()
         for name in files:
             if name.startswith('physical_state_') and name.endswith('.json'):
                 mid = name[len('physical_state_'):-len('.json')]
-                # Include files named by date YYYY-MM-DD
                 if re.fullmatch(r'\d{4}-\d{2}-\d{2}', mid):
                     dates.add(mid)
-                # Also scan timestamped backups YYYYMMDD_HHMMSS for embedded 'date' field
-                elif re.fullmatch(r'\d{8}_\d{6}', mid):
-                    try:
-                        j = storage_read_json(name, default=None)
-                        d = (j or {}).get('date') if isinstance(j, dict) else None
-                        if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
-                            dates.add(d)
-                    except Exception:
-                        pass
-        # Also include the stable file if present
+        # Include stable file date if present
         try:
             j = storage_read_json('physical_state.json', default=None)
             d = (j or {}).get('date') if isinstance(j, dict) else None
@@ -1016,7 +1062,10 @@ def list_count_dates():
                 dates.add(d)
         except Exception:
             pass
-        return jsonify({'dates': sorted(dates)})
+        # Persist index for fast subsequent calls
+        dates_list = sorted(dates)
+        _set_dates_index(dates_list)
+        return jsonify({'dates': dates_list})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
