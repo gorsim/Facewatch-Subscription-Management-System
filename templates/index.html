@@ -1547,68 +1547,73 @@ if (clearSearchBtn) {
               console.log('✓ ZXing code reader created (supports Code128, QR, EAN, etc.)');
             }
 
-            // Get video devices
-            const videoInputDevices = await codeReader.listVideoInputDevices();
-            console.log('Available cameras:', videoInputDevices.length);
-
-            if (videoInputDevices.length === 0) {
-              statusEl && (statusEl.textContent = 'No camera found');
-              return;
-            }
-
-            // Prefer back camera
-            let selectedDeviceId = videoInputDevices[0].deviceId;
-            const backCamera = videoInputDevices.find(device =>
-              /back|rear|environment/i.test(device.label)
-            );
-            if (backCamera) {
-              selectedDeviceId = backCamera.deviceId;
-              console.log('Using back camera:', backCamera.label);
-            } else {
-              console.log('Using camera:', videoInputDevices[0].label);
-            }
-
-            // Start continuous decode from video
-            await codeReader.decodeFromVideoDevice(
-              selectedDeviceId,
-              videoEl,
-              (result, err) => {
-                if (!scanning) return;
-                if (result) {
-                  const text = result.getText();
-                  console.log('✓ Barcode detected:', text, 'Format:', result.getBarcodeFormat());
-
-                  if (!text || text === lastText) return;
-                  lastText = text;
-
-                  const code = parseCameraCode(text);
-                  console.log('Parsed camera code:', code);
-
-                  if (code) {
-                    statusEl && (statusEl.textContent = 'Found ' + code);
-                    const tr = findRowByCode(code);
-                    if (tr) {
-                      jumpToRow(tr);
-                      markRow(tr);
-                      statusEl && (statusEl.textContent = '✓ Found and ticked: ' + code);
-                    } else {
-                      statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list');
-                    }
-                    setTimeout(()=>{
-                      lastText='';
-                      if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at next barcode');
-                    }, 1500);
-                  } else {
-                    statusEl && (statusEl.textContent = 'No camera code in: ' + text.substring(0, 30));
-                    setTimeout(()=>{
-                      lastText='';
-                      if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at barcode');
-                    }, 1500);
-                  }
+            // Helper function to pick rear camera
+            async function pickRearDeviceId() {
+              let tmpStream;
+              try {
+                // Prompt for permission so device labels become available
+                tmpStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cams = devices.filter(d => d.kind === 'videoinput');
+                console.log('Available cameras:', cams.length);
+                let best = cams.find(d => /back|rear|environment/i.test(d.label)) || cams[0];
+                if (best) {
+                  console.log('Using camera:', best.label);
+                  return best.deviceId;
                 }
-                // Ignore errors - they happen constantly when no barcode is visible
+                return null;
+              } finally {
+                try { tmpStream && tmpStream.getTracks().forEach(t => t.stop()); } catch(_) {}
               }
-            );
+            }
+
+            // Callback for barcode detection
+            function onDecode(result, err) {
+              if (!scanning) return;
+              if (result) {
+                const text = result.getText();
+                console.log('✓ Barcode detected:', text, 'Format:', result.getBarcodeFormat());
+
+                if (!text || text === lastText) return;
+                lastText = text;
+
+                const code = parseCameraCode(text);
+                console.log('Parsed camera code:', code);
+
+                if (code) {
+                  statusEl && (statusEl.textContent = 'Found ' + code);
+                  const tr = findRowByCode(code);
+                  if (tr) {
+                    jumpToRow(tr);
+                    markRow(tr);
+                    statusEl && (statusEl.textContent = '✓ Found and ticked: ' + code);
+                  } else {
+                    statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list');
+                  }
+                  setTimeout(()=>{
+                    lastText='';
+                    if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at next barcode');
+                  }, 1500);
+                } else {
+                  statusEl && (statusEl.textContent = 'No camera code in: ' + text.substring(0, 30));
+                  setTimeout(()=>{
+                    lastText='';
+                    if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at barcode');
+                  }, 1500);
+                }
+              }
+              // Ignore errors - they happen constantly when no barcode is visible
+            }
+
+            // Start scanning
+            const deviceId = await pickRearDeviceId().catch(() => null);
+            if (deviceId) {
+              await codeReader.decodeFromVideoDevice(deviceId, videoEl, onDecode);
+            } else {
+              // Fallback: use constraints instead
+              const constraints = { video: { facingMode: { ideal: 'environment' } } };
+              await codeReader.decodeFromConstraints(constraints, videoEl, onDecode);
+            }
 
             statusEl && (statusEl.textContent = 'Scanning… Point camera at barcode');
             console.log('✓ Scanner started - watching for Code128 barcodes');
