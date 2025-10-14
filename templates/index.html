@@ -367,13 +367,17 @@
           if (sel.value) {
             el.value = sel.value; setLS('countDate', el.value);
             // Call hydrate/ensure safely in case the later script hasn’t loaded yet
-            (function callHydrateSafely(){
-              const fn = window.hydrateFromSavedState;
-              if (typeof fn === 'function') fn(); else setTimeout(callHydrateSafely, 60);
-            })();
             (function callEnsureSafely(){
               const fn = window.ensureGenerated;
-              if (typeof fn === 'function') fn(); else setTimeout(callEnsureSafely, 60);
+              if (typeof fn === 'function') {
+                fn().then(() => {
+                  console.log('✓ ensureGenerated completed, rows should be visible');
+                }).catch(err => {
+                  console.error('Error in ensureGenerated:', err);
+                });
+              } else {
+                setTimeout(callEnsureSafely, 60);
+              }
             })();
           }
         });
