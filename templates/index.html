@@ -414,10 +414,11 @@
         });
       }
 
-      // Track unsaved changes (notes/locations/ticks) to confirm on Close
-      let hasUnsavedChanges = false;
-
     })();
+
+    // Track unsaved changes (notes/locations/ticks) to confirm on Close
+    // MUST be global so Close button handler can access it
+    let hasUnsavedChanges = false;
 
     // Global state for installed per code (from last Generate)
     let installedMap = {};
