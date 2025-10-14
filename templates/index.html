@@ -1444,14 +1444,20 @@ if (clearSearchBtn) {
         const scanBtn = document.getElementById('scanBtn');
 
         // Check if we're returning from QRbot with scan results
+        console.log('🔍 Checking for QRbot return. Current URL:', window.location.href);
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('x-source') === 'qrbot') {
+        console.log('🔍 URL params:', Array.from(urlParams.entries()));
+        const xSource = urlParams.get('x-source');
+        console.log('🔍 x-source parameter:', xSource);
+
+        if (xSource === 'qrbot') {
           const content = urlParams.get('content');
           const format = urlParams.get('format');
           console.log('✓ QRbot scan result:', content, 'Format:', format);
 
           if (content) {
             // Store the scanned code to process after table loads
+            console.log('✓ Storing scanned code in sessionStorage:', content);
             sessionStorage.setItem('pendingScanCode', content);
           }
 
@@ -1461,17 +1467,23 @@ if (clearSearchBtn) {
           if (dateParam) {
             cleanUrl += '?date=' + encodeURIComponent(dateParam);
           }
+          console.log('✓ Cleaning URL to:', cleanUrl);
           window.history.replaceState({}, document.title, cleanUrl);
 
           // Trigger data load for the selected date
+          console.log('✓ Triggering ensureGenerated...');
           (function callEnsureSafely(){
             const fn = window.ensureGenerated;
             if (typeof fn === 'function') {
+              console.log('✓ Calling ensureGenerated()');
               fn();
             } else {
+              console.log('⏳ ensureGenerated not ready, retrying...');
               setTimeout(callEnsureSafely, 100);
             }
           })();
+        } else {
+          console.log('ℹ️ Not a QRbot return (x-source=' + xSource + ')');
         }
 
         function parseCameraCode(raw){
