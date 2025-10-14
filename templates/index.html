@@ -754,6 +754,9 @@
         } catch {}
       }
 
+      // Expose ensureGenerated globally so it can be called from other scripts
+      window.ensureGenerated = ensureGenerated;
+
       // Pagination state
       let page = 1;
       let pageSize = (() => {
@@ -1452,6 +1455,16 @@ if (clearSearchBtn) {
             cleanUrl += '?date=' + encodeURIComponent(dateParam);
           }
           window.history.replaceState({}, document.title, cleanUrl);
+
+          // Trigger data load for the selected date
+          (function callEnsureSafely(){
+            const fn = window.ensureGenerated;
+            if (typeof fn === 'function') {
+              fn();
+            } else {
+              setTimeout(callEnsureSafely, 100);
+            }
+          })();
         }
 
         function parseCameraCode(raw){
