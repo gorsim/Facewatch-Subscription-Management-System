@@ -651,6 +651,7 @@
 
       // Ensure results are generated for selected date (uses last uploaded files)
       async function ensureGenerated() {
+        console.log('🔧 ensureGenerated called for date:', getSelectedDate());
         const table = document.getElementById('stockTable');
         // Always check for saved data first, regardless of table state
         try {
@@ -658,6 +659,7 @@
           const saved = await savedRes.json();
 
           if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
+            console.log('✓ Found saved theoretical_stock with', saved.theoretical_stock.length, 'items');
             // Use saved theoretical stock data for this specific date
             const data = {
               theoretical_stock: saved.theoretical_stock,
@@ -670,6 +672,7 @@
             };
             await renderResults(data);
             statusEl.textContent = 'Loaded historical data for ' + getSelectedDate() + '.';
+            console.log('✓ ensureGenerated completed successfully');
             return;
           }
         } catch (e) {
@@ -911,6 +914,7 @@
     };
 
     async function renderResults(data) {
+      console.log('🔧 renderResults called with', (data.theoretical_stock || []).length, 'items');
       const table = document.getElementById('stockTable');
       const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
@@ -1116,6 +1120,7 @@
 	      } catch(_) {}
 
       table.style.display = '';
+      console.log('✓ Table display set to visible, tbody has', tbody.children.length, 'rows');
 
       // Default sort by Delivery Date descending
       const deliveryTh = document.querySelector('#stockTable th[data-col="delivery_date"]');
