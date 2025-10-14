@@ -1461,12 +1461,21 @@ if (clearSearchBtn) {
             sessionStorage.setItem('pendingScanCode', content);
           }
 
-          // Clean up URL parameters but keep the date parameter if it exists
-          const dateParam = urlParams.get('date');
-          let cleanUrl = window.location.origin + window.location.pathname;
-          if (dateParam) {
-            cleanUrl += '?date=' + encodeURIComponent(dateParam);
+          // Restore the date from sessionStorage
+          const savedDate = sessionStorage.getItem('scanReturnDate');
+          if (savedDate) {
+            console.log('✓ Restoring date from sessionStorage:', savedDate);
+            const dateInput = document.getElementById('countDate');
+            if (dateInput) {
+              dateInput.value = savedDate;
+              // Also update localStorage
+              try { localStorage.setItem('countDate', savedDate); } catch(e) {}
+            }
+            sessionStorage.removeItem('scanReturnDate');
           }
+
+          // Clean up URL parameters
+          const cleanUrl = window.location.origin + window.location.pathname;
           console.log('✓ Cleaning URL to:', cleanUrl);
           window.history.replaceState({}, document.title, cleanUrl);
 
@@ -1574,16 +1583,21 @@ if (clearSearchBtn) {
         }
 
         function startScan() {
-          // Build the callback URL - preserve the current date parameter
-          const currentParams = new URLSearchParams(window.location.search);
-          const dateParam = currentParams.get('date');
-          let callbackUrl = window.location.origin + window.location.pathname;
-          if (dateParam) {
-            callbackUrl += '?date=' + encodeURIComponent(dateParam);
+          // Store the current date in sessionStorage so we can restore it after QRbot returns
+          const currentDate = document.getElementById('countDate')?.value;
+          if (currentDate) {
+            sessionStorage.setItem('scanReturnDate', currentDate);
+            console.log('📱 Stored date for return:', currentDate);
           }
+
+          // Use a simple callback URL without parameters (QRbot may strip them)
+          const callbackUrl = window.location.origin + window.location.pathname;
           const encodedCallback = encodeURIComponent(callbackUrl);
           const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + encodedCallback;
 
+          console.log('📱 Callback URL:', callbackUrl);
+          console.log('📱 Encoded callback:', encodedCallback);
+          console.log('📱 Full QRbot URL:', qrbotUrl);
           console.log('Launching QRbot scanner...');
           window.location.href = qrbotUrl;
         }
