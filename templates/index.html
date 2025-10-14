@@ -480,7 +480,7 @@
 
     </div>
   </div>
-  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
 
   <script>
     let deliveredName = null;
@@ -1518,9 +1518,9 @@ if (clearSearchBtn) {
 
         async function startScan(){
           try {
-            if (!window.ZXing) {
+            if (!window.ZXingBrowser) {
               statusEl && (statusEl.textContent = 'Scanner library not loaded');
-              console.error('ZXing library not available');
+              console.error('ZXingBrowser library not available');
               return;
             }
 
@@ -1541,10 +1541,22 @@ if (clearSearchBtn) {
 
             statusEl && (statusEl.textContent = 'Starting camera…');
 
-            // Create code reader if not exists
+            // Create code reader with hints for better Code128 detection
             if (!codeReader) {
-              codeReader = new ZXing.BrowserMultiFormatReader();
-              console.log('✓ ZXing code reader created');
+              const hints = new Map();
+              const formats = [
+                ZXingBrowser.BarcodeFormat.CODE_128,
+                ZXingBrowser.BarcodeFormat.CODE_39,
+                ZXingBrowser.BarcodeFormat.CODE_93,
+                ZXingBrowser.BarcodeFormat.EAN_13,
+                ZXingBrowser.BarcodeFormat.EAN_8,
+                ZXingBrowser.BarcodeFormat.QR_CODE
+              ];
+              hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, formats);
+              hints.set(ZXingBrowser.DecodeHintType.TRY_HARDER, true);
+
+              codeReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
+              console.log('✓ ZXing code reader created with Code128 support');
             }
 
             // Get video devices
