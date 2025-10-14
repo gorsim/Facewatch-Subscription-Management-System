@@ -235,6 +235,7 @@ def login():
         password = (request.form.get('password') or '').strip()
         user = get_user(username)
         if user and check_password_hash(user.get('password_hash',''), password):
+            session.permanent = True  # Make session persistent across browser redirects
             session['logged_in'] = True
             session['user'] = user.get('username')
             session['role'] = user.get('role','user')

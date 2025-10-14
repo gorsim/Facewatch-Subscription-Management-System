@@ -1155,6 +1155,11 @@
         const cc = document.getElementById('controlsChip'); if (cc) cc.style.display = 'inline-flex';
       } catch(_) {}
 
+      // Process any pending scan from QRbot
+      if (window.processPendingScan) {
+        window.processPendingScan();
+      }
+
     }
 
 
@@ -1436,11 +1441,16 @@ if (clearSearchBtn) {
           console.log('✓ QRbot scan result:', content, 'Format:', format);
 
           if (content) {
-            handleScannedCode(content);
+            // Store the scanned code to process after table loads
+            sessionStorage.setItem('pendingScanCode', content);
           }
 
-          // Clean up URL parameters
-          const cleanUrl = window.location.origin + window.location.pathname;
+          // Clean up URL parameters but keep the date parameter if it exists
+          const dateParam = urlParams.get('date');
+          let cleanUrl = window.location.origin + window.location.pathname;
+          if (dateParam) {
+            cleanUrl += '?date=' + encodeURIComponent(dateParam);
+          }
           window.history.replaceState({}, document.title, cleanUrl);
         }
 
@@ -1526,14 +1536,33 @@ if (clearSearchBtn) {
         }
 
         function startScan() {
-          // Build the callback URL - return to current page
-          const currentUrl = window.location.origin + window.location.pathname;
-          const callbackUrl = encodeURIComponent(currentUrl);
-          const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + callbackUrl;
+          // Build the callback URL - preserve the current date parameter
+          const currentParams = new URLSearchParams(window.location.search);
+          const dateParam = currentParams.get('date');
+          let callbackUrl = window.location.origin + window.location.pathname;
+          if (dateParam) {
+            callbackUrl += '?date=' + encodeURIComponent(dateParam);
+          }
+          const encodedCallback = encodeURIComponent(callbackUrl);
+          const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + encodedCallback;
 
           console.log('Launching QRbot scanner...');
           window.location.href = qrbotUrl;
         }
+
+        // Check for pending scan code after table is loaded
+        // This will be called by the table loading code
+        window.processPendingScan = function() {
+          const pendingCode = sessionStorage.getItem('pendingScanCode');
+          if (pendingCode) {
+            console.log('Processing pending scan:', pendingCode);
+            sessionStorage.removeItem('pendingScanCode');
+            // Wait a bit for table to be fully rendered
+            setTimeout(() => {
+              handleScannedCode(pendingCode);
+            }, 500);
+          }
+        };
 
         // Attach click handler to scan button
         scanBtn && scanBtn.addEventListener('click', startScan);
