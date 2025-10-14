@@ -351,6 +351,11 @@
       el.value = urlDate || saved || todayStr();
       if (urlDate) setLS('countDate', el.value);
       el.addEventListener('change', () => {
+        // Skip if this change was triggered programmatically from Past Counts dropdown
+        if (el.dataset.skipChangeEvent === 'true') {
+          console.log('⏭️ Skipping date change handler (triggered from Past Counts dropdown)');
+          return;
+        }
         if (!el.value) el.value = todayStr();
         setLS('countDate', el.value);
         // Clear cached data when date changes to force fresh load
@@ -365,7 +370,12 @@
         sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
         sel.addEventListener('change', () => {
           if (sel.value) {
-            el.value = sel.value; setLS('countDate', el.value);
+            // Set skip flag to prevent date input's change handler from firing
+            el.dataset.skipChangeEvent = 'true';
+            el.value = sel.value;
+            setLS('countDate', el.value);
+            // Re-enable after a short delay
+            setTimeout(() => { delete el.dataset.skipChangeEvent; }, 100);
             // Call hydrate/ensure safely in case the later script hasn’t loaded yet
             (function callEnsureSafely(){
               const fn = window.ensureGenerated;
