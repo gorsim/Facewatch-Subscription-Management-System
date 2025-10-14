@@ -466,21 +466,7 @@
 
     </div>
   </div>
-  <div id="scanOverlay" aria-hidden="true">
-    <div class="inner">
-      <div id="scanHeader">
-        <div>Scanner</div>
-        <div>
-          <button id="scanStopBtn" class="secondary">Stop</button>
-          <button id="scanCloseBtn" class="secondary">Close</button>
-        </div>
-      </div>
-      <video id="scanVideo" playsinline></video>
-      <div id="scanStatus">Grant camera permission to start scanning…</div>
 
-    </div>
-  </div>
-  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
 
   <script>
     let deliveredName = null;
@@ -1437,23 +1423,25 @@ if (clearSearchBtn) {
       }).catch(()=>{});
     })();
 
-    // Barcode/QR Scanner
+    // Barcode/QR Scanner using QRbot x-callback-url
     (function(){
       try {
         const scanBtn = document.getElementById('scanBtn');
-        const overlay = document.getElementById('scanOverlay');
-        const videoEl = document.getElementById('scanVideo');
-        const closeBtn = document.getElementById('scanCloseBtn');
-        const stopBtn = document.getElementById('scanStopBtn');
-        const statusEl = document.getElementById('scanStatus');
-        let codeReader = null;
-        let scanning = false;
-        let lastText = '';
 
-        function showOverlay(show){
-          if (!overlay) return;
-          overlay.style.display = show ? 'block' : 'none';
-          overlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+        // Check if we're returning from QRbot with scan results
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('x-source') === 'qrbot') {
+          const content = urlParams.get('content');
+          const format = urlParams.get('format');
+          console.log('✓ QRbot scan result:', content, 'Format:', format);
+
+          if (content) {
+            handleScannedCode(content);
+          }
+
+          // Clean up URL parameters
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
         }
 
         function parseCameraCode(raw){
@@ -1475,6 +1463,7 @@ if (clearSearchBtn) {
 
           return null;
         }
+
         function findRowByCode(code){
           const rows = document.querySelectorAll('#stockTable tbody tr');
           const target = (code||'').toUpperCase();
@@ -1484,6 +1473,7 @@ if (clearSearchBtn) {
           }
           return null;
         }
+
         function jumpToRow(tr){
           const tbody = document.querySelector('#stockTable tbody');
           const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -1502,6 +1492,7 @@ if (clearSearchBtn) {
             tr.scrollIntoView({behavior:'smooth', block:'center'});
           }
         }
+
         function markRow(tr){
           const cb = tr.querySelector('.physical-checkbox');
           if (cb && !cb.checked && !cb.disabled) {
@@ -1516,133 +1507,36 @@ if (clearSearchBtn) {
           try { navigator.vibrate && navigator.vibrate(30); } catch(_) {}
         }
 
-        async function startScan(){
-          try {
-            if (!window.ZXingBrowser) {
-              statusEl && (statusEl.textContent = 'Scanner library not loaded');
-              console.error('ZXingBrowser library not available');
-              return;
-            }
+        function handleScannedCode(scannedText) {
+          const code = parseCameraCode(scannedText);
+          console.log('Parsed camera code:', code);
 
-            scanning = true;
-            lastText = '';
-            showOverlay(true);
-
-            // iOS Safari requires a secure context (HTTPS or localhost) for camera
-            const isSecure = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
-            if (!isSecure) {
-              statusEl && (statusEl.textContent = 'Camera access requires HTTPS or localhost. Please open the app via https://');
-              return;
-            }
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-              statusEl && (statusEl.textContent = 'Camera API not available in this browser.');
-              return;
-            }
-
-            statusEl && (statusEl.textContent = 'Starting camera…');
-
-            // Create code reader - BrowserMultiFormatReader supports Code128 by default
-            if (!codeReader) {
-              codeReader = new ZXingBrowser.BrowserMultiFormatReader();
-              console.log('✓ ZXing code reader created (supports Code128, QR, EAN, etc.)');
-            }
-
-            // Helper function to pick rear camera
-            async function pickRearDeviceId() {
-              let tmpStream;
-              try {
-                // Prompt for permission so device labels become available
-                tmpStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const cams = devices.filter(d => d.kind === 'videoinput');
-                console.log('Available cameras:', cams.length);
-                let best = cams.find(d => /back|rear|environment/i.test(d.label)) || cams[0];
-                if (best) {
-                  console.log('Using camera:', best.label);
-                  return best.deviceId;
-                }
-                return null;
-              } finally {
-                try { tmpStream && tmpStream.getTracks().forEach(t => t.stop()); } catch(_) {}
-              }
-            }
-
-            // Callback for barcode detection
-            function onDecode(result, err) {
-              if (!scanning) return;
-              if (result) {
-                const text = result.getText();
-                console.log('✓ Barcode detected:', text, 'Format:', result.getBarcodeFormat());
-
-                if (!text || text === lastText) return;
-                lastText = text;
-
-                const code = parseCameraCode(text);
-                console.log('Parsed camera code:', code);
-
-                if (code) {
-                  statusEl && (statusEl.textContent = 'Found ' + code);
-                  const tr = findRowByCode(code);
-                  if (tr) {
-                    jumpToRow(tr);
-                    markRow(tr);
-                    statusEl && (statusEl.textContent = '✓ Found and ticked: ' + code);
-                  } else {
-                    statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list');
-                  }
-                  setTimeout(()=>{
-                    lastText='';
-                    if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at next barcode');
-                  }, 1500);
-                } else {
-                  statusEl && (statusEl.textContent = 'No camera code in: ' + text.substring(0, 30));
-                  setTimeout(()=>{
-                    lastText='';
-                    if (scanning) statusEl && (statusEl.textContent = 'Scanning… Point at barcode');
-                  }, 1500);
-                }
-              }
-              // Ignore errors - they happen constantly when no barcode is visible
-            }
-
-            // Start scanning
-            const deviceId = await pickRearDeviceId().catch(() => null);
-            if (deviceId) {
-              await codeReader.decodeFromVideoDevice(deviceId, videoEl, onDecode);
+          if (code) {
+            const tr = findRowByCode(code);
+            if (tr) {
+              jumpToRow(tr);
+              markRow(tr);
+              alert('✓ Found and ticked: ' + code);
             } else {
-              // Fallback: use constraints instead
-              const constraints = { video: { facingMode: { ideal: 'environment' } } };
-              await codeReader.decodeFromConstraints(constraints, videoEl, onDecode);
+              alert('Code ' + code + ' not found in current list');
             }
-
-            statusEl && (statusEl.textContent = 'Scanning… Point camera at barcode');
-            console.log('✓ Scanner started - watching for Code128 barcodes');
-
-          } catch(e) {
-            console.error('Scanner error:', e);
-            const msg = (e && e.name === 'NotAllowedError') ? 'Camera permission denied. In Safari, tap aA > Website Settings > Camera: Allow. Ensure Private Browsing is OFF.' :
-                        (e && e.name === 'NotFoundError') ? 'No camera found on this device.' :
-                        'Error starting scanner: ' + (e.message || e);
-            statusEl && (statusEl.textContent = msg);
-            scanning = false;
+          } else {
+            alert('No camera code found in: ' + scannedText);
           }
         }
-        function stopScan(){
-          scanning = false;
-          try {
-            if (codeReader) {
-              codeReader.reset();
-              console.log('Scanner stopped');
-            }
-          } catch(e) {
-            console.log('Error stopping scanner:', e);
-          }
-          showOverlay(false);
+
+        function startScan() {
+          // Build the callback URL - return to current page
+          const currentUrl = window.location.origin + window.location.pathname;
+          const callbackUrl = encodeURIComponent(currentUrl);
+          const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + callbackUrl;
+
+          console.log('Launching QRbot scanner...');
+          window.location.href = qrbotUrl;
         }
 
+        // Attach click handler to scan button
         scanBtn && scanBtn.addEventListener('click', startScan);
-        closeBtn && closeBtn.addEventListener('click', stopScan);
-        stopBtn && stopBtn.addEventListener('click', stopScan);
 
       } catch(err) {
         // If scanner initialization fails, don't break the rest of the app
