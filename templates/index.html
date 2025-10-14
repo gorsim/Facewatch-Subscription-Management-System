@@ -1475,10 +1475,10 @@ if (clearSearchBtn) {
         });
 
         // Close modal with save confirmation
-        function closeModal() {
+        async function closeModal() {
           if (hasUnsavedChanges) {
             if (confirm('Do you want to save changes before closing?')) {
-              saveCurrentState();
+              await saveStateNow();
             }
           }
           if (modal) modal.classList.remove('show');
@@ -1624,14 +1624,22 @@ if (clearSearchBtn) {
 
             // Auto-save after processing
             console.log('Auto-saving batch import changes...');
-            saveCurrentState();
-            hasUnsavedChanges = false;
+            saveStateNow().then(() => {
+              console.log('✓ Batch import changes saved successfully');
+              hasUnsavedChanges = false;
 
-            // Show save confirmation in results
-            if (resultDiv) {
-              const saveMsg = '<div style="margin-top:8px; color:#10b981; font-size:12px;">✓ Changes saved automatically</div>';
-              resultDiv.innerHTML += saveMsg;
-            }
+              // Show save confirmation in results
+              if (resultDiv) {
+                const saveMsg = '<div style="margin-top:8px; color:#10b981; font-size:12px;">✓ Changes saved automatically</div>';
+                resultDiv.innerHTML += saveMsg;
+              }
+            }).catch(err => {
+              console.error('Failed to save batch import changes:', err);
+              if (resultDiv) {
+                const errorMsg = '<div style="margin-top:8px; color:#ef4444; font-size:12px;">⚠ Failed to save - please click "Close & Save" at bottom</div>';
+                resultDiv.innerHTML += errorMsg;
+              }
+            });
           }
 
           // Auto-close modal after 3 seconds if all were found
