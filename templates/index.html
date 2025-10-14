@@ -1158,6 +1158,13 @@
         const cc = document.getElementById('controlsChip'); if (cc) cc.style.display = 'inline-flex';
       } catch(_) {}
 
+      // Refresh the date history dropdown to show this date
+      try {
+        if (window.refreshDateHistory) {
+          refreshDateHistory();
+        }
+      } catch(_) {}
+
       // Process any pending scan from QRbot
       if (window.processPendingScan) {
         window.processPendingScan();
@@ -1534,14 +1541,20 @@ if (clearSearchBtn) {
           const code = parseCameraCode(scannedText);
           console.log('Parsed camera code:', code);
 
+          // Debug: check table state
+          const tbody = document.querySelector('#stockTable tbody');
+          const rowCount = tbody ? tbody.querySelectorAll('tr').length : 0;
+          console.log('Table has', rowCount, 'rows');
+
           if (code) {
             const tr = findRowByCode(code);
+            console.log('Found row for', code, ':', tr ? 'YES' : 'NO');
             if (tr) {
               jumpToRow(tr);
               markRow(tr);
               alert('✓ Found and ticked: ' + code);
             } else {
-              alert('Code ' + code + ' not found in current list');
+              alert('Code ' + code + ' not found in current list (table has ' + rowCount + ' rows)');
             }
           } else {
             alert('No camera code found in: ' + scannedText);
@@ -1568,12 +1581,15 @@ if (clearSearchBtn) {
         window.processPendingScan = function() {
           const pendingCode = sessionStorage.getItem('pendingScanCode');
           if (pendingCode) {
-            console.log('Processing pending scan:', pendingCode);
+            console.log('✓ Processing pending scan:', pendingCode);
             sessionStorage.removeItem('pendingScanCode');
-            // Wait a bit for table to be fully rendered
+            // Wait longer for table to be fully rendered and hydrated
             setTimeout(() => {
+              console.log('✓ Executing handleScannedCode for:', pendingCode);
               handleScannedCode(pendingCode);
-            }, 500);
+            }, 1500);
+          } else {
+            console.log('No pending scan code found in sessionStorage');
           }
         };
 
