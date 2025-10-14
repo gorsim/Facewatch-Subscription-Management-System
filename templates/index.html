@@ -63,12 +63,17 @@
     }
     #stockTable tbody.missing-only tr[data-missing="0"] { display: none; }
     .pagination-hidden { display: none !important; }
-    /* Scanner overlay */
-    #scanOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 1000; color: #e5e7eb; }
-    #scanOverlay .inner { position: absolute; inset: 0; display: flex; flex-direction: column; }
-    #scanHeader { display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; background: #0b1220; border-bottom: 1px solid #334155; }
-    #scanVideo { width: 100%; height: auto; flex: 1; background: black; }
-    #scanStatus { padding: 8px 12px; font-size: 14px; color: #94a3b8; }
+    /* Batch Import Modal */
+    #batchImportModal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center; }
+    #batchImportModal.show { display: flex; }
+    #batchImportModal .modal-content { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    #batchImportModal h2 { margin: 0 0 12px; font-size: 20px; }
+    #batchImportModal p { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+    #batchImportModal textarea { width: 100%; min-height: 200px; padding: 12px; background: #0b1220; border: 1px solid #334155; border-radius: 8px; color: #e5e7eb; font-family: monospace; font-size: 13px; resize: vertical; }
+    #batchImportModal .modal-actions { display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; }
+    #batchImportModal .result { margin-top: 16px; padding: 12px; background: #0b1220; border: 1px solid #334155; border-radius: 8px; font-size: 13px; }
+    #batchImportModal .result .success { color: #10b981; }
+    #batchImportModal .result .error { color: #ef4444; }
     .scan-hit { outline: 2px solid #22c55e; box-shadow: 0 0 0 2px #22c55e inset; }
   </style>
 </head>
@@ -134,7 +139,7 @@
       <div class="actions">
         <button id="uploadBtn">Upload Files</button>
         <button id="generateBtn" class="secondary" disabled>GENERATE STOCK LIST</button>
-        <button id="scanBtn" class="secondary" title="Scan barcode/QR to find Camera Code">Scan</button>
+        <button id="batchImportBtn" class="secondary" title="Import multiple scanned barcodes">📋 Batch Import Scans</button>
         <div class="search">
           <span style="position:relative; display:inline-flex; align-items:center;">
             <input id="searchInput" type="text" placeholder="Filter by Camera Code" style="padding-right:28px;" />
@@ -339,6 +344,7 @@
       // Safe localStorage helpers
       const getLS = (k) => { try { return window.localStorage.getItem(k); } catch(e) { try { return (window.__ls||{})[k]; } catch(_) { return null; } } };
       const setLS = (k, v) => { try { window.localStorage.setItem(k, v); } catch(e) { window.__ls = window.__ls || {}; window.__ls[k] = v; } };
+
       // Read ?date= from URL if available
       let urlDate = null;
       try { urlDate = new URLSearchParams(window.location.search).get('date'); } catch(_) { urlDate = null; }
@@ -702,11 +708,6 @@
             } catch(_) {}
           } catch(_) {}
 
-          // Process pending scan even if table was already loaded
-          console.log('✓ Table was already loaded, checking for pending scan...');
-          if (window.processPendingScan) {
-            window.processPendingScan();
-          }
           return;
         }
         console.log('🔍 Checking file names. deliveredName:', deliveredName, 'installedName:', installedName);
@@ -721,11 +722,7 @@
           } catch {}
         }
         if (!deliveredName || !installedName) {
-          console.log('⚠️ No file names available, cannot generate. Checking for pending scan anyway...');
-          // Even if we can't load data, process pending scan in case table was already loaded
-          if (window.processPendingScan) {
-            window.processPendingScan();
-          }
+          console.log('⚠️ No file names available, cannot generate.');
           return;
         }
         try {
@@ -1181,11 +1178,6 @@
         }
       } catch(_) {}
 
-      // Process any pending scan from QRbot
-      if (window.processPendingScan) {
-        window.processPendingScan();
-      }
-
     }
 
 
@@ -1454,118 +1446,37 @@ if (clearSearchBtn) {
       }).catch(()=>{});
     })();
 
-    // Barcode/QR Scanner using QRbot x-callback-url
+    // Batch Import Scanner
     (function(){
       try {
-        const scanBtn = document.getElementById('scanBtn');
+        const batchImportBtn = document.getElementById('batchImportBtn');
+        const modal = document.getElementById('batchImportModal');
+        const cancelBtn = document.getElementById('batchImportCancel');
+        const processBtn = document.getElementById('batchImportProcess');
+        const inputArea = document.getElementById('batchImportInput');
+        const resultDiv = document.getElementById('batchImportResult');
 
-        // Check if we're returning from QRbot with scan results
-        console.log('🔍 Checking for QRbot return. Current URL:', window.location.href);
-        console.log('🔍 URL hash:', window.location.hash);
-        const urlParams = new URLSearchParams(window.location.search);
-        console.log('🔍 URL params:', Array.from(urlParams.entries()));
+        // Open modal
+        batchImportBtn && batchImportBtn.addEventListener('click', () => {
+          modal.classList.add('show');
+          inputArea.value = '';
+          inputArea.focus();
+          resultDiv.style.display = 'none';
+        });
 
-        // Also check hash parameters (some apps use fragments)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        console.log('🔍 Hash params:', Array.from(hashParams.entries()));
+        // Close modal
+        cancelBtn && cancelBtn.addEventListener('click', () => {
+          modal.classList.remove('show');
+        });
 
-        const xSource = urlParams.get('x-source') || hashParams.get('x-source');
-        console.log('🔍 x-source parameter:', xSource);
-
-        if (xSource === 'qrbot') {
-          const content = urlParams.get('content') || hashParams.get('content');
-          const format = urlParams.get('format') || hashParams.get('format');
-          console.log('✓ QRbot scan result:', content, 'Format:', format);
-
-          if (content) {
-            // Store the scanned code to process after table loads
-            console.log('✓ Storing scanned code in sessionStorage:', content);
-            sessionStorage.setItem('pendingScanCode', content);
+        // Close on background click
+        modal && modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            modal.classList.remove('show');
           }
+        });
 
-          // Restore the date from sessionStorage
-          const savedDate = sessionStorage.getItem('scanReturnDate');
-          if (savedDate) {
-            console.log('✓ Restoring date from sessionStorage:', savedDate);
-            const dateInput = document.getElementById('countDate');
-            if (dateInput) {
-              dateInput.value = savedDate;
-              // Also update localStorage
-              try { localStorage.setItem('countDate', savedDate); } catch(e) {}
-            }
-            sessionStorage.removeItem('scanReturnDate');
-          }
-
-          // Clean up URL parameters
-          const cleanUrl = window.location.origin + window.location.pathname;
-          console.log('✓ Cleaning URL to:', cleanUrl);
-          window.history.replaceState({}, document.title, cleanUrl);
-
-          // Trigger data load for the selected date
-          console.log('✓ Triggering ensureGenerated...');
-          (function callEnsureSafely(){
-            const fn = window.ensureGenerated;
-            if (typeof fn === 'function') {
-              console.log('✓ Calling ensureGenerated()');
-              fn();
-            } else {
-              console.log('⏳ ensureGenerated not ready, retrying...');
-              setTimeout(callEnsureSafely, 100);
-            }
-          })();
-        } else {
-          console.log('ℹ️ Not a QRbot return (x-source=' + xSource + ')');
-
-          // Fallback: Check if we recently launched QRbot
-          const qrbotLaunched = sessionStorage.getItem('qrbotLaunched');
-          const launchTime = parseInt(sessionStorage.getItem('qrbotLaunchTime') || '0');
-          const timeSinceLaunch = Date.now() - launchTime;
-
-          if (qrbotLaunched === 'true' && timeSinceLaunch < 60000) {
-            // We launched QRbot less than 60 seconds ago and just returned
-            console.log('⚠️ Detected return from QRbot (launched ' + Math.round(timeSinceLaunch/1000) + 's ago)');
-            console.log('⚠️ But QRbot did NOT append scan parameters to URL');
-            console.log('⚠️ This means either:');
-            console.log('   1. User cancelled the scan');
-            console.log('   2. QRbot x-callback-url is not working with this domain');
-            console.log('   3. QRbot needs a different URL format');
-
-            // Clean up flags
-            sessionStorage.removeItem('qrbotLaunched');
-            sessionStorage.removeItem('qrbotLaunchTime');
-
-            // Restore the date
-            const savedDate = sessionStorage.getItem('scanReturnDate');
-            if (savedDate) {
-              console.log('✓ Restoring date from sessionStorage:', savedDate);
-              const dateInput = document.getElementById('countDate');
-              if (dateInput) {
-                dateInput.value = savedDate;
-                try { localStorage.setItem('countDate', savedDate); } catch(e) {}
-              }
-              sessionStorage.removeItem('scanReturnDate');
-            }
-
-            // Offer manual input as fallback
-            const manualCode = prompt('QRbot did not return scan data.\n\nIf you scanned a barcode, please enter the code manually (e.g., 2502CA1A73):');
-            if (manualCode && manualCode.trim()) {
-              console.log('✓ User entered manual code:', manualCode);
-              sessionStorage.setItem('pendingScanCode', manualCode.trim());
-
-              // Trigger data load and scan processing
-              (function callEnsureSafely(){
-                const fn = window.ensureGenerated;
-                if (typeof fn === 'function') {
-                  console.log('✓ Calling ensureGenerated() for manual code');
-                  fn();
-                } else {
-                  setTimeout(callEnsureSafely, 100);
-                }
-              })();
-            }
-          }
-        }
-
+        // Parse camera code from scanned text
         function parseCameraCode(raw){
           const t = String(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 
@@ -1586,35 +1497,17 @@ if (clearSearchBtn) {
           return null;
         }
 
-        function findRowByCode(code){
+        // Find row by camera code
+        function findRowByCode(code) {
           const rows = document.querySelectorAll('#stockTable tbody tr');
-          const target = (code||'').toUpperCase();
-          for (const r of rows){
-            const val = (r.children[0]?.innerText||'').trim().toUpperCase();
-            if (val === target) return r;
+          for (let tr of rows) {
+            const cellCode = (tr.children[0]?.innerText || '').trim().toUpperCase();
+            if (cellCode === code.toUpperCase()) return tr;
           }
           return null;
         }
 
-        function jumpToRow(tr){
-          const tbody = document.querySelector('#stockTable tbody');
-          const rows = Array.from(tbody.querySelectorAll('tr'));
-          const showMissing = document.getElementById('showMissingOnly')?.checked;
-          const visibleRows = rows.filter(r => {
-            const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
-            const matchType = (r.dataset.typeMatch ?? '1') === '1';
-            const matchLoc = (r.dataset.locMatch ?? '1') === '1';
-            const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
-            return matchSearch && matchType && matchLoc && matchMissing;
-          });
-          const idx = visibleRows.indexOf(tr);
-          if (idx >= 0) {
-            page = Math.floor(idx / pageSize) + 1;
-            applyPagination();
-            tr.scrollIntoView({behavior:'smooth', block:'center'});
-          }
-        }
-
+        // Mark row as ticked
         function markRow(tr){
           const cb = tr.querySelector('.physical-checkbox');
           if (cb && !cb.checked && !cb.disabled) {
@@ -1629,74 +1522,64 @@ if (clearSearchBtn) {
           try { navigator.vibrate && navigator.vibrate(30); } catch(_) {}
         }
 
-        function handleScannedCode(scannedText) {
-          const code = parseCameraCode(scannedText);
-          console.log('Parsed camera code:', code);
+        // Process batch import
+        processBtn && processBtn.addEventListener('click', () => {
+          const input = inputArea.value || '';
+          const lines = input.split('\n').map(l => l.trim()).filter(l => l);
 
-          // Debug: check table state
-          const tbody = document.querySelector('#stockTable tbody');
-          const rowCount = tbody ? tbody.querySelectorAll('tr').length : 0;
-          console.log('Table has', rowCount, 'rows');
+          if (lines.length === 0) {
+            alert('Please paste some scanned codes first.');
+            return;
+          }
 
-          if (code) {
-            const tr = findRowByCode(code);
-            console.log('Found row for', code, ':', tr ? 'YES' : 'NO');
-            if (tr) {
-              jumpToRow(tr);
-              markRow(tr);
-              alert('✓ Found and ticked: ' + code);
-            } else {
-              alert('Code ' + code + ' not found in current list (table has ' + rowCount + ' rows)');
+          const results = {
+            total: lines.length,
+            found: [],
+            notFound: [],
+            invalid: []
+          };
+
+          lines.forEach(line => {
+            const code = parseCameraCode(line);
+            if (!code) {
+              results.invalid.push(line);
+              return;
             }
-          } else {
-            alert('No camera code found in: ' + scannedText);
+
+            const tr = findRowByCode(code);
+            if (tr) {
+              markRow(tr);
+              results.found.push(code);
+            } else {
+              results.notFound.push(code);
+            }
+          });
+
+          // Show results
+          let html = '<div>';
+          html += `<div class="success">✓ Found and ticked: ${results.found.length} cameras</div>`;
+          if (results.notFound.length > 0) {
+            html += `<div class="error">✗ Not found: ${results.notFound.length} cameras</div>`;
+            html += `<div style="margin-top:8px; font-size:12px; color:#94a3b8;">Not found: ${results.notFound.join(', ')}</div>`;
           }
-        }
-
-        function startScan() {
-          // Store the current date in sessionStorage so we can restore it after QRbot returns
-          const currentDate = document.getElementById('countDate')?.value;
-          if (currentDate) {
-            sessionStorage.setItem('scanReturnDate', currentDate);
-            console.log('📱 Stored date for return:', currentDate);
+          if (results.invalid.length > 0) {
+            html += `<div class="error">✗ Invalid codes: ${results.invalid.length}</div>`;
+            html += `<div style="margin-top:8px; font-size:12px; color:#94a3b8;">Invalid: ${results.invalid.join(', ')}</div>`;
           }
+          html += '</div>';
 
-          // Mark that we're launching QRbot (for fallback detection)
-          sessionStorage.setItem('qrbotLaunched', 'true');
-          sessionStorage.setItem('qrbotLaunchTime', Date.now().toString());
+          resultDiv.innerHTML = html;
+          resultDiv.style.display = 'block';
 
-          // Use a simple callback URL without parameters (QRbot may strip them)
-          // Try with explicit protocol and trailing slash
-          const callbackUrl = window.location.origin + window.location.pathname;
-          const encodedCallback = encodeURIComponent(callbackUrl);
-          const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + encodedCallback;
-
-          console.log('📱 Callback URL:', callbackUrl);
-          console.log('📱 Encoded callback:', encodedCallback);
-          console.log('📱 Full QRbot URL:', qrbotUrl);
-          console.log('Launching QRbot scanner...');
-          window.location.href = qrbotUrl;
-        }
-
-        // Check for pending scan code after table is loaded
-        // This will be called by the table loading code
-        window.processPendingScan = function() {
-          const pendingCode = sessionStorage.getItem('pendingScanCode');
-          if (pendingCode) {
-            console.log('✓ Processing pending scan:', pendingCode);
-            sessionStorage.removeItem('pendingScanCode');
-            // Wait longer for table to be fully rendered and hydrated
+          // Auto-close modal after 3 seconds if all were found
+          if (results.notFound.length === 0 && results.invalid.length === 0) {
             setTimeout(() => {
-              console.log('✓ Executing handleScannedCode for:', pendingCode);
-              handleScannedCode(pendingCode);
-            }, 1500);
-          } else {
-            console.log('No pending scan code found in sessionStorage');
+              modal.classList.remove('show');
+            }, 3000);
           }
-        };
+        });
 
-        // Attach click handler to scan button
-        scanBtn && scanBtn.addEventListener('click', startScan);
+
 
       } catch(err) {
         // If scanner initialization fails, don't break the rest of the app
@@ -1957,6 +1840,25 @@ if (clearSearchBtn) {
       });
     });
   </script>
+
+  <!-- Batch Import Modal -->
+  <div id="batchImportModal">
+    <div class="modal-content">
+      <h2>📋 Batch Import Scanned Codes</h2>
+      <p>Paste scanned barcode data below (one per line). The system will extract camera codes and tick matching items.</p>
+      <textarea id="batchImportInput" placeholder="Paste scanned codes here, e.g.:
+2502CA1A73
+2502CA1B42
+2502CA2C15
+..."></textarea>
+      <div id="batchImportResult" class="result" style="display:none;"></div>
+      <div class="modal-actions">
+        <button id="batchImportCancel" class="secondary">Cancel</button>
+        <button id="batchImportProcess">Process & Tick</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
 
