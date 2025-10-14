@@ -1456,17 +1456,24 @@ if (clearSearchBtn) {
         const inputArea = document.getElementById('batchImportInput');
         const resultDiv = document.getElementById('batchImportResult');
 
+        if (!modal) {
+          console.error('Batch import modal not found');
+          return;
+        }
+
         // Open modal
         batchImportBtn && batchImportBtn.addEventListener('click', () => {
-          modal.classList.add('show');
-          inputArea.value = '';
-          inputArea.focus();
-          resultDiv.style.display = 'none';
+          if (modal) {
+            modal.classList.add('show');
+            if (inputArea) inputArea.value = '';
+            if (inputArea) inputArea.focus();
+            if (resultDiv) resultDiv.style.display = 'none';
+          }
         });
 
         // Close modal
         cancelBtn && cancelBtn.addEventListener('click', () => {
-          modal.classList.remove('show');
+          if (modal) modal.classList.remove('show');
         });
 
         // Close on background click
@@ -1594,13 +1601,15 @@ if (clearSearchBtn) {
 
           html += '</div>';
 
-          resultDiv.innerHTML = html;
-          resultDiv.style.display = 'block';
+          if (resultDiv) {
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+          }
 
           // Auto-close modal after 3 seconds if all were found
           if (results.notFound.length === 0 && results.invalid.length === 0) {
             setTimeout(() => {
-              modal.classList.remove('show');
+              if (modal) modal.classList.remove('show');
             }, 3000);
           }
         });
