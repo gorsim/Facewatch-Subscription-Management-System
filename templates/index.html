@@ -1628,6 +1628,14 @@ if (clearSearchBtn) {
               console.log('✓ Batch import changes saved successfully');
               hasUnsavedChanges = false;
 
+              // Refresh the Past Counts dropdown to include the newly saved date
+              try {
+                refreshDateHistory();
+                window.populateBringForwardDates && window.populateBringForwardDates();
+              } catch(e) {
+                console.error('Failed to refresh date dropdowns:', e);
+              }
+
               // Show save confirmation in results
               if (resultDiv) {
                 const saveMsg = '<div style="margin-top:8px; color:#10b981; font-size:12px;">✓ Changes saved automatically</div>';
