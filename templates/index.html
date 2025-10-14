@@ -1445,14 +1445,20 @@ if (clearSearchBtn) {
 
         // Check if we're returning from QRbot with scan results
         console.log('🔍 Checking for QRbot return. Current URL:', window.location.href);
+        console.log('🔍 URL hash:', window.location.hash);
         const urlParams = new URLSearchParams(window.location.search);
         console.log('🔍 URL params:', Array.from(urlParams.entries()));
-        const xSource = urlParams.get('x-source');
+
+        // Also check hash parameters (some apps use fragments)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        console.log('🔍 Hash params:', Array.from(hashParams.entries()));
+
+        const xSource = urlParams.get('x-source') || hashParams.get('x-source');
         console.log('🔍 x-source parameter:', xSource);
 
         if (xSource === 'qrbot') {
-          const content = urlParams.get('content');
-          const format = urlParams.get('format');
+          const content = urlParams.get('content') || hashParams.get('content');
+          const format = urlParams.get('format') || hashParams.get('format');
           console.log('✓ QRbot scan result:', content, 'Format:', format);
 
           if (content) {
@@ -1493,6 +1499,29 @@ if (clearSearchBtn) {
           })();
         } else {
           console.log('ℹ️ Not a QRbot return (x-source=' + xSource + ')');
+
+          // Fallback: Check if we recently launched QRbot
+          const qrbotLaunched = sessionStorage.getItem('qrbotLaunched');
+          const launchTime = parseInt(sessionStorage.getItem('qrbotLaunchTime') || '0');
+          const timeSinceLaunch = Date.now() - launchTime;
+
+          if (qrbotLaunched === 'true' && timeSinceLaunch < 60000) {
+            // We launched QRbot less than 60 seconds ago and just returned
+            console.log('⚠️ Detected return from QRbot (launched ' + Math.round(timeSinceLaunch/1000) + 's ago)');
+            console.log('⚠️ But QRbot did NOT append scan parameters to URL');
+            console.log('⚠️ This means either:');
+            console.log('   1. User cancelled the scan');
+            console.log('   2. QRbot x-callback-url is not working with this domain');
+            console.log('   3. QRbot needs a different URL format');
+
+            // Clean up flags
+            sessionStorage.removeItem('qrbotLaunched');
+            sessionStorage.removeItem('qrbotLaunchTime');
+            sessionStorage.removeItem('scanReturnDate');
+
+            // Show alert to user
+            alert('QRbot returned without scan data. Please try scanning again or check if QRbot has permission to return to Safari.');
+          }
         }
 
         function parseCameraCode(raw){
@@ -1590,7 +1619,12 @@ if (clearSearchBtn) {
             console.log('📱 Stored date for return:', currentDate);
           }
 
+          // Mark that we're launching QRbot (for fallback detection)
+          sessionStorage.setItem('qrbotLaunched', 'true');
+          sessionStorage.setItem('qrbotLaunchTime', Date.now().toString());
+
           // Use a simple callback URL without parameters (QRbot may strip them)
+          // Try with explicit protocol and trailing slash
           const callbackUrl = window.location.origin + window.location.pathname;
           const encodedCallback = encodeURIComponent(callbackUrl);
           const qrbotUrl = 'https://qrbot.net/x-callback-url/scan?x-success=' + encodedCallback;
