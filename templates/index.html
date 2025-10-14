@@ -1446,8 +1446,8 @@ if (clearSearchBtn) {
       }).catch(()=>{});
     })();
 
-    // Batch Import Scanner
-    (function(){
+    // Batch Import Scanner - wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function(){
       try {
         const batchImportBtn = document.getElementById('batchImportBtn');
         const modal = document.getElementById('batchImportModal');
@@ -1457,7 +1457,7 @@ if (clearSearchBtn) {
         const resultDiv = document.getElementById('batchImportResult');
 
         if (!modal) {
-          console.error('Batch import modal not found');
+          console.error('Batch import modal not found in DOM');
           return;
         }
 
@@ -1618,9 +1618,9 @@ if (clearSearchBtn) {
 
       } catch(err) {
         // If scanner initialization fails, don't break the rest of the app
-        console.error('Scanner module failed to initialize:', err);
+        console.error('Batch import module failed to initialize:', err);
       }
-    })();
+    });
 
     // View toggle (Table/Cards)
     (function(){
