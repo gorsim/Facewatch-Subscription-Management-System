@@ -333,16 +333,21 @@
       const el = document.getElementById('countDate');
       return (el && el.value) ? el.value : todayStr();
     }
-    // Init date input
+    // Init date input (guarded for Safari/iPad private mode and older WebKit)
     (function initDateControls(){
       const el = document.getElementById('countDate');
-      const saved = localStorage.getItem('countDate');
-      const urlDate = new URLSearchParams(window.location.search).get('date');
+      // Safe localStorage helpers
+      const getLS = (k) => { try { return window.localStorage.getItem(k); } catch(e) { try { return (window.__ls||{})[k]; } catch(_) { return null; } } };
+      const setLS = (k, v) => { try { window.localStorage.setItem(k, v); } catch(e) { window.__ls = window.__ls || {}; window.__ls[k] = v; } };
+      // Read ?date= from URL if available
+      let urlDate = null;
+      try { urlDate = new URLSearchParams(window.location.search).get('date'); } catch(_) { urlDate = null; }
+      const saved = getLS('countDate');
       el.value = urlDate || saved || todayStr();
-      if (urlDate) localStorage.setItem('countDate', el.value);
+      if (urlDate) setLS('countDate', el.value);
       el.addEventListener('change', () => {
         if (!el.value) el.value = todayStr();
-        localStorage.setItem('countDate', el.value);
+        setLS('countDate', el.value);
         // Clear cached data when date changes to force fresh load
         theoreticalStockData = [];
         installedName = null;
@@ -355,7 +360,7 @@
         sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
         sel.addEventListener('change', () => {
           if (sel.value) {
-            el.value = sel.value; localStorage.setItem('countDate', el.value);
+            el.value = sel.value; setLS('countDate', el.value);
             // Call hydrate/ensure safely in case the later script hasn’t loaded yet
             (function callHydrateSafely(){
               const fn = window.hydrateFromSavedState;
@@ -472,25 +477,38 @@
       </div>
       <video id="scanVideo" playsinline></video>
       <div id="scanStatus">Grant camera permission to start scanning…</div>
+
     </div>
   </div>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
 
   <script>
     let deliveredName = null;
+    // Minimal global error reporting to on-page status (helps on iPad Safari)
+    (function(){
+      function setStatus(msg){ try { const s=document.getElementById('status'); if(s) s.textContent=msg; } catch(_){} }
+      window.addEventListener('error', function(e){ setStatus('JS Error: ' + (e && e.message ? e.message : 'Unknown')); });
+      window.addEventListener('unhandledrejection', function(e){ setStatus('JS Error: ' + (e && (e.reason && e.reason.message ? e.reason.message : e.reason) || 'Promise rejection')); });
+    })();
+
       // Render Cards from current table rows (global scope)
       function renderCardsFromTable() {
         const list = document.getElementById('cardList');
         if (!list) return;
         list.innerHTML = '';
         const showMissing = document.getElementById('showMissingOnly')?.checked;
+
         const rows = Array.from(document.querySelectorAll('#stockTable tbody tr'));
         const allFiltered = document.getElementById('cardsAllFiltered')?.checked;
         rows.forEach(tr => {
           // Respect filters and optionally pagination
           const hiddenByPage = tr.classList.contains('pagination-hidden');
           if (!allFiltered && hiddenByPage) return;
-          if (tr.style.display === 'none') return; // filtered by search/type/location
+          // Do not rely on inline style; use flags and missing
+          const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
+          const matchType = (tr.dataset.typeMatch ?? '1') === '1';
+          const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
+          if (!(matchSearch && matchType && matchLoc)) return;
           if (showMissing && !(parseInt(tr.dataset.missing || '0') > 0)) return;
 
           const code = tr.children[0]?.innerText || '';
@@ -664,8 +682,37 @@
 
         // If no saved data, check if we need to generate fresh data
         if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
-          // Table has data but no saved data for this date - show message
-          statusEl.textContent = 'No historical data found for ' + getSelectedDate() + '. Please upload files and generate a new count.';
+          // Rows already present (e.g., from guaranteed flush). Finish full UI init here.
+          try {
+            const tbody = table.tBodies[0];
+            // Compute summary from DOM rows
+            let total_installed = 0, total_theoretical_stock = 0;
+            tbody.querySelectorAll('tr').forEach(tr => {
+              const instCell = tr.children[4];
+              const inst = parseInt((instCell && instCell.textContent) || '0', 10) || 0;
+              total_installed += inst;
+              total_theoretical_stock += parseInt(tr.dataset.theoretical || '0', 10) || 0;
+            });
+            const total_delivered = total_installed + total_theoretical_stock;
+            try {
+              document.getElementById('sumDelivered').innerText = String(total_delivered);
+              document.getElementById('sumInstalled').innerText = String(total_installed);
+              document.getElementById('summary').style.display = 'flex';
+            } catch(_) {}
+
+            // Hydrate saved ticks/notes/locations, then recompute totals before filters/pagination
+            await hydrateFromSavedState();
+            recalcTotals();
+            try { applySearch(); applyTypeFilter(); applyLocationFilter(); } catch(_) {}
+            renderCardsFromTable();
+            applyMissingFilter();
+            applyPagination();
+            // Ensure footer/actions visible
+            try {
+              const sa = document.getElementById('saveActions'); if (sa) sa.style.display = 'block';
+              const cc = document.getElementById('controlsChip'); if (cc) cc.style.display = 'inline-flex';
+            } catch(_) {}
+          } catch(_) {}
           return;
         }
         if (!deliveredName || !installedName) {
@@ -704,6 +751,17 @@
               anomalies: [],
               summary: { total_delivered: 0, total_installed: 0, total_theoretical_stock: 0 }
             };
+      // Mobile default: smaller page size for faster initial render
+      (function mobileDefaults(){
+        try {
+          const ua = navigator.userAgent || '';
+          if (/iPad|iPhone|iPod|Android/i.test(ua)) {
+            const sel = document.getElementById('pageSize');
+            if (sel) sel.value = '25';
+          }
+        } catch(_){}
+      })();
+
             await renderResults(data);
             statusEl.textContent = 'No historical data found for ' + getSelectedDate() + '. Please generate a new count.';
           }
@@ -712,31 +770,58 @@
 
       // Pagination state
       let page = 1;
-      let pageSize = parseInt(document.getElementById('pageSize').value, 10) || 50;
+      let pageSize = (() => {
+        const sel = document.getElementById('pageSize');
+        try {
+          const ua = navigator.userAgent || '';
+          if (/iPad|iPhone|iPod|Android/i.test(ua) && sel) {
+            if (!sel.value || sel.value === '50') sel.value = '25';
+          }
+        } catch(_) {}
+        return parseInt((sel && sel.value) ? sel.value : '50', 10) || 50;
+      })();
 
       function applyPagination() {
         const tbody = document.querySelector('#stockTable tbody');
         const rows = Array.from(tbody.querySelectorAll('tr'));
         const showMissing = document.getElementById('showMissingOnly')?.checked;
-        const visibleRows = rows.filter(r => {
-          const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
-          const matchType = (r.dataset.typeMatch ?? '1') === '1';
-          const matchLoc = (r.dataset.locMatch ?? '1') === '1';
-          const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
-          const inlineVisible = r.style.display !== 'none';
-          return matchSearch && matchType && matchLoc && matchMissing && inlineVisible;
-        });
+        const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+        const t = document.getElementById('typeFilter')?.value || '';
+        const lf = document.getElementById('locationFilter')?.value || '';
+
+        let visibleRows = rows;
+        // Fast path: no filters means all rows are candidates
+        if (q || t || lf || showMissing) {
+          visibleRows = rows.filter(r => {
+            const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
+            const matchType = (r.dataset.typeMatch ?? '1') === '1';
+            const matchLoc = (r.dataset.locMatch ?? '1') === '1';
+            const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
+            return matchSearch && matchType && matchLoc && matchMissing;
+          });
+          // Safari/iPad guard: if filters are effectively empty but we got a tiny set, fall back to all
+          if (!q && !t && !lf && showMissing === false && visibleRows.length < 0.5 * rows.length) {
+            visibleRows = rows;
+          }
+        }
+
         const total = visibleRows.length;
         const totalPages = Math.max(1, Math.ceil(total / pageSize));
         if (page > totalPages) page = totalPages;
         const start = (page - 1) * pageSize;
         const end = start + pageSize;
+
+        // First hide all, then reveal only current page in visibleRows
+        rows.forEach(r => r.classList.add('pagination-hidden'));
         let count = 0;
         visibleRows.forEach((r, idx) => {
           const show = idx >= start && idx < end;
-          r.classList.toggle('pagination-hidden', !show);
-          if (show) count++;
+          if (show) {
+            r.classList.remove('pagination-hidden');
+            count++;
+          }
         });
+
         document.getElementById('pageControls').style.display = total > pageSize ? '' : 'none';
         document.getElementById('pageInfo').innerText = `Page ${page} / ${totalPages} (${count} of ${total})`;
         // If card view is active, refresh cards to reflect current page/filters
@@ -823,6 +908,9 @@
       const table = document.getElementById('stockTable');
       const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
+      const totalIncoming = (data.theoretical_stock || []).length;
+      try { statusEl && (statusEl.textContent = `Rendering ${totalIncoming} rows…`); } catch(_) {}
+
 
       // Populate Cam Type filter options (unique types from data)
       const typeSet = new Set(['']);
@@ -873,6 +961,8 @@
         opt.value = t; opt.textContent = t || 'All';
         typeFilter.appendChild(opt);
       });
+      // Ensure default to All on initial render
+      try { typeFilter.value = ''; } catch(_) {}
 
       // Populate Location filter options from saved state and current rows
       const locationFilter = document.getElementById('locationFilter');
@@ -895,42 +985,99 @@
         opt.value = l; opt.textContent = l || 'All';
         locationFilter.appendChild(opt);
       });
+      // Ensure default to All on initial render
+      try { locationFilter.value = ''; } catch(_) {}
 
-      data.theoretical_stock.forEach(row => {
-        const tr = document.createElement('tr');
-        const physical = 0; // starts unticked
-        const missing = Math.max(0, row.theoretical_stock - physical);
-        const disabled = row.theoretical_stock <= 0;
-        const locationSelect = `<select class="location" data-code="${row.camera_code}"></select>`;
-        tr.dataset.theoretical = String(row.theoretical_stock);
-        tr.innerHTML = `
-          <td>${row.camera_code}</td>
-          <td>${row.cam_type || ''}</td>
-          <td>${row.po || ''}</td>
-          <td>${row.delivery_date || ''}</td>
-          <td>${row.installed}</td>
-          <td><input type="checkbox" class="physical-checkbox" data-code="${row.camera_code}" ${disabled ? 'disabled' : ''} /></td>
-          <td class="missing">${missing}</td>
-          <td><input type="text" class="notes" placeholder="Notes" data-code="${row.camera_code}" /></td>
-          <td><select class="location" data-code="${row.camera_code}" data-default-location="${row.default_location || ''}"></select></td>
-        `;
-        tbody.appendChild(tr);
+      // Progressive row rendering for mobile Safari performance (await completion)
+      await new Promise((resolve) => {
+        const rows = data.theoretical_stock || [];
+        let flushTimer;
+
+        let i = 0;
+        function appendChunk() {
+          const frag = document.createDocumentFragment();
+          const CHUNK = 100; // smaller chunks for iPad stability
+          for (let c = 0; c < CHUNK && i < rows.length; c++, i++) {
+            const row = rows[i];
+            const tr = document.createElement('tr');
+            const physical = 0;
+            const missing = Math.max(0, (row.theoretical_stock||0) - physical);
+            const disabled = (row.theoretical_stock||0) <= 0;
+            tr.dataset.theoretical = String(row.theoretical_stock||0);
+            tr.innerHTML = `
+              <td>${row.camera_code}</td>
+              <td>${row.cam_type || ''}</td>
+              <td>${row.po || ''}</td>
+              <td>${row.delivery_date || ''}</td>
+              <td>${row.installed||0}</td>
+              <td><input type="checkbox" class="physical-checkbox" data-code="${row.camera_code}" ${disabled ? 'disabled' : ''} /></td>
+              <td class="missing">${missing}</td>
+              <td><input type="text" class="notes" placeholder="Notes" data-code="${row.camera_code}" /></td>
+              <td><select class="location" data-code="${row.camera_code}" data-default-location="${row.default_location || ''}"></select></td>
+            `;
+            // default filter flags to visible
+            tr.dataset.searchMatch = '1';
+            tr.dataset.typeMatch = '1';
+            tr.dataset.locMatch = '1';
+            frag.appendChild(tr);
+          }
+          tbody.appendChild(frag);
+          if (i < rows.length) {
+            setTimeout(appendChunk, 0); // avoid RAF throttling on iOS
+          } else {
+            try { clearTimeout(flushTimer); } catch(_){}
+            resolve();
+          }
+      try { statusEl && (statusEl.textContent = `Appended ${tbody.children.length} / ${totalIncoming} rows`); } catch(_) {}
+
+        }
+        // Guaranteed completion fallback: after 1.8s, synchronously flush remaining rows
+        flushTimer = setTimeout(() => {
+          try {
+            if (i < rows.length) {
+              const SAFE_BATCH = 500;
+              let frag = document.createDocumentFragment();
+              let n = 0;
+              while (i < rows.length) {
+                const row = rows[i++];
+                const tr = document.createElement('tr');
+                const physical = 0;
+                const missing = Math.max(0, (row.theoretical_stock||0) - physical);
+                const disabled = (row.theoretical_stock||0) <= 0;
+                tr.dataset.theoretical = String(row.theoretical_stock||0);
+                tr.innerHTML = `
+                  <td>${row.camera_code}</td>
+                  <td>${row.cam_type || ''}</td>
+                  <td>${row.po || ''}</td>
+                  <td>${row.delivery_date || ''}</td>
+                  <td>${row.installed||0}</td>
+                  <td><input type="checkbox" class="physical-checkbox" data-code="${row.camera_code}" ${disabled ? 'disabled' : ''} /></td>
+                  <td class="missing">${missing}</td>
+                  <td><input type="text" class="notes" placeholder="Notes" data-code="${row.camera_code}" /></td>
+                  <td><select class="location" data-code="${row.camera_code}" data-default-location="${row.default_location || ''}"></select></td>
+                `;
+                tr.dataset.searchMatch = '1';
+                tr.dataset.typeMatch = '1';
+                tr.dataset.locMatch = '1';
+                frag.appendChild(tr);
+                if ((++n) % SAFE_BATCH === 0) { tbody.appendChild(frag); frag = document.createDocumentFragment(); }
+              }
+              if (frag.childNodes.length) tbody.appendChild(frag);
+            }
+          } finally {
+            try { statusEl && (statusEl.textContent = `Appended ${tbody.children.length} / ${totalIncoming} rows (flush)`); } catch(_) {}
+            resolve();
+          }
+        }, 1800);
+
+        appendChunk();
       });
 
-      // Update totals on checkbox change (optimized: mutate totals instead of full recompute)
-      totalPhysical = 0; totalMissing = 0;
-      // initialize totals
-      tbody.querySelectorAll('tr').forEach(tr => {
-        const theoretical = parseInt(tr.dataset.theoretical || '0');
-        const physical = tr.querySelector('.physical-checkbox').checked ? 1 : 0;
-        const missing = Math.max(0, theoretical - physical);
-        tr.querySelector('.missing').innerText = missing;
-        tr.dataset.missing = String(missing);
-        totalPhysical += physical; totalMissing += missing;
-      });
-      updateTotalsUI();
+      // Update totals listener is added below; initial totals will be set after hydration
 
       // Only add event listener if not already added
+            clearTimeout(flushTimer);
+
       if (!tbody.dataset.listenerAdded) {
         tbody.dataset.listenerAdded = 'true';
         tbody.addEventListener('change', (e) => {
@@ -953,9 +1100,15 @@
 
       document.getElementById('sumDelivered').innerText = data.summary.total_delivered;
       document.getElementById('sumInstalled').innerText = data.summary.total_installed;
-      recalcTotals();
 
       document.getElementById('summary').style.display = 'flex';
+
+	      // Ensure totals boxes show something immediately
+	      try {
+	        document.getElementById('sumPhysical').innerText = String(totalPhysical||0);
+	        document.getElementById('sumMissing').innerText = String(totalMissing||0);
+	      } catch(_) {}
+
       table.style.display = '';
 
       // Default sort by Delivery Date descending
@@ -985,15 +1138,42 @@
       document.getElementById('saveActions').style.display = '';
       document.getElementById('controlsChip').style.display = '';
 
-      // Build initial cards as well
+      // Hydrate saved state first (ensures totals and checkboxes are correct), then build cards
+      await hydrateFromSavedState();
+      // Default the search box to empty on initial render to avoid stale filtering
+      try { const si = document.getElementById('searchInput'); if (si && !si.dataset.initialized) { si.value = ''; si.dataset.initialized = '1'; } } catch(_){}
+      // Apply filters explicitly to ensure clean "All" defaults
+      try { applySearch(); applyTypeFilter(); applyLocationFilter(); } catch(_){}
+      try {
+        const tbody = document.querySelector('#stockTable tbody');
+        const rowsAll = Array.from(tbody.querySelectorAll('tr'));
+        const showMissing = document.getElementById('showMissingOnly')?.checked;
+        const visibleCount = rowsAll.length; // diagnostics: before pagination, with no filters treat all as visible
+        statusEl && (statusEl.textContent = `Rows: ${rowsAll.length} | Visible: ${visibleCount} | Page size: ${pageSize}`);
+
+	      // Diagnostics: confirm totals after hydration and pagination
+	      try { statusEl && (statusEl.textContent = `Totals: Physical ${totalPhysical} | Missing ${totalMissing}`); } catch(_) {}
+
+      } catch(_) {}
+
+      // Recalc totals BEFORE any pagination/filtering that depends on dataset.missing
+      try { recalcTotals(); } catch(_){}
+      try { document.getElementById('summary').style.display = 'flex'; updateTotalsUI(); } catch(_) {}
+
       renderCardsFromTable();
-      hydrateFromSavedState();
       applyMissingFilter();
+      applyPagination();
+      // Ensure actions/footer are visible
+      try {
+        const sa = document.getElementById('saveActions'); if (sa) sa.style.display = 'block';
+        const cc = document.getElementById('controlsChip'); if (cc) cc.style.display = 'inline-flex';
+      } catch(_) {}
+
     }
 
 
 
-    document.getElementById('showMissingOnly').addEventListener('change', () => { applyMissingFilter(); page = 1; applyPagination(); });
+    document.getElementById('showMissingOnly').addEventListener('change', () => { try { recalcTotals(); } catch(_) {}; applyMissingFilter(); page = 1; applyPagination(); });
     // Guard: search button may not exist (we have live search)
     (function(){
       const searchBtnEl = document.getElementById('searchBtn');
@@ -1039,7 +1219,6 @@ if (clearSearchBtn) {
       rows.forEach(r => {
         const val = (r.querySelector('select.location')?.value || '').trim();
         r.dataset.locMatch = (lf === '' || val === lf) ? '1' : '0';
-        r.style.display = (r.dataset.searchMatch === '1' && (r.dataset.typeMatch ?? '1') === '1' && r.dataset.locMatch === '1') ? '' : 'none';
       });
     }
 
@@ -1094,8 +1273,8 @@ if (clearSearchBtn) {
     async function hydrateFromSavedState() {
       try {
         const res = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
-        const data = await res.json();
-        if (data.error) return;
+        let data = await res.json();
+        if (data && data.error) data = {};
         // load locations list first
         setLocationsList(data.locations_list || []);
         // First, merge global locations so row selects see the full list
@@ -1105,24 +1284,35 @@ if (clearSearchBtn) {
           setLocationsList(merged);
           refreshRowLocationSelects(merged);
         } catch {}
+        // Normalize keys for robust matching
+        const norm = (s) => (s == null ? '' : String(s).trim().toUpperCase());
+        const pcRaw = data.physical_counts || {};
+        const notesRaw = data.notes || {};
+        const locRaw = data.locations_map || {};
+        const pc = {}; Object.keys(pcRaw).forEach(k => pc[norm(k)] = !!pcRaw[k]);
+        const notes = {}; Object.keys(notesRaw).forEach(k => notes[norm(k)] = notesRaw[k]);
+        const locs = {}; Object.keys(locRaw).forEach(k => locs[norm(k)] = locRaw[k]);
+        // If physical_counts appears empty, try a non-destructive hint from installed_map
+        const instRaw = data.installed_map || {};
+        const inst = {}; Object.keys(instRaw).forEach(k => inst[norm(k)] = instRaw[k]);
+
         // Now set values per code
         document.querySelectorAll('.physical-checkbox').forEach(chk => {
-          const code = chk.dataset.code;
-          const v = (data.physical_counts || {})[code] ? true : false;
-          if (!chk.disabled) chk.checked = v;
+          const code = norm(chk.dataset.code);
+          const v = pc.hasOwnProperty(code) ? pc[code] : (inst[code] > 0 ? true : false);
+          if (!chk.disabled) chk.checked = !!v;
         });
         document.querySelectorAll('.notes').forEach(inp => {
-          const code = inp.dataset.code;
-          inp.value = (data.notes || {})[code] || '';
+          const code = norm(inp.dataset.code);
+          inp.value = notes[code] || '';
         });
         document.querySelectorAll('select.location').forEach(sel => {
-          const code = sel.dataset.code;
-          const savedLocation = (data.locations_map || {})[code] || '';
+          const code = norm(sel.dataset.code);
+          const savedLocation = locs[code] || '';
           const defaultLocation = sel.dataset.defaultLocation || '';
           sel.value = savedLocation || defaultLocation;
         });
         recalcTotals();
-        applyPagination();
       } catch (e) { /* ignore */ }
     }
 
@@ -1291,8 +1481,7 @@ if (clearSearchBtn) {
           const matchType = (r.dataset.typeMatch ?? '1') === '1';
           const matchLoc = (r.dataset.locMatch ?? '1') === '1';
           const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
-          const inlineVisible = r.style.display !== 'none';
-          return matchSearch && matchType && matchLoc && matchMissing && inlineVisible;
+          return matchSearch && matchType && matchLoc && matchMissing;
         });
         const idx = visibleRows.indexOf(tr);
         if (idx >= 0) {
@@ -1320,29 +1509,68 @@ if (clearSearchBtn) {
         if (!reader) reader = new ZXingBrowser.BrowserMultiFormatReader();
         scanning = true; lastText = '';
         showOverlay(true);
-        statusEl && (statusEl.textContent = 'Starting camera…');
-        try {
-          await reader.decodeFromVideoDevice(null, videoEl, (result, err) => {
-            if (!scanning) return;
-            if (result) {
-              const text = result.getText();
-              if (!text || text === lastText) return;
-              lastText = text;
-              const code = parseCameraCode(text);
-              if (code) {
-                statusEl && (statusEl.textContent = 'Found ' + code);
-                const tr = findRowByCode(code);
-                if (tr) { jumpToRow(tr); markRow(tr); }
-                else { statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list'); }
-                setTimeout(()=>{ lastText=''; }, 800);
-              } else {
-                statusEl && (statusEl.textContent = 'Unrecognized format');
-                setTimeout(()=>{ lastText=''; }, 600);
-              }
+
+        // iOS Safari requires a secure context (HTTPS or localhost) for camera
+        const isSecure = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+        if (!isSecure) {
+          statusEl && (statusEl.textContent = 'Camera access requires HTTPS or localhost. Please open the app via https://');
+          return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          statusEl && (statusEl.textContent = 'Camera API not available in this browser.');
+          return;
+        }
+
+        statusEl && (statusEl.textContent = 'Requesting camera permission…');
+
+        async function pickRearDeviceId() {
+          let tmpStream;
+          try {
+            // Prompt for permission so device labels become available
+            tmpStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cams = devices.filter(d => d.kind === 'videoinput');
+            let best = cams.find(d => /back|rear|environment/i.test(d.label)) || cams[0];
+            return (best && best.deviceId) || null;
+          } finally {
+            try { tmpStream && tmpStream.getTracks().forEach(t => t.stop()); } catch(_) {}
+          }
+        }
+
+        function onDecode(result, err) {
+          if (!scanning) return;
+          if (result) {
+            const text = result.getText();
+            if (!text || text === lastText) return;
+            lastText = text;
+            const code = parseCameraCode(text);
+            if (code) {
+              statusEl && (statusEl.textContent = 'Found ' + code);
+              const tr = findRowByCode(code);
+              if (tr) { jumpToRow(tr); markRow(tr); }
+              else { statusEl && (statusEl.textContent = 'Code ' + code + ' not in current list'); }
+              setTimeout(()=>{ lastText=''; }, 800);
+            } else {
+              statusEl && (statusEl.textContent = 'Unrecognized format');
+              setTimeout(()=>{ lastText=''; }, 600);
             }
-          });
+          }
+        }
+
+        try {
+          const deviceId = await pickRearDeviceId().catch(() => null);
+          statusEl && (statusEl.textContent = deviceId ? 'Starting rear camera…' : 'Starting camera…');
+          if (deviceId) {
+            await reader.decodeFromVideoDevice(deviceId, videoEl, onDecode);
+          } else {
+            const constraints = { video: { facingMode: { ideal: 'environment' } } };
+            await reader.decodeFromConstraints(constraints, videoEl, onDecode);
+          }
         } catch(e) {
-          statusEl && (statusEl.textContent = 'Camera permission denied or not available');
+          const msg = (e && e.name === 'NotAllowedError') ? 'Camera permission denied. In Safari, tap aA > Website Settings > Camera: Allow. Ensure Private Browsing is OFF.' :
+                      (e && e.name === 'NotFoundError') ? 'No camera found on this device.' :
+                      'Camera permission denied or not available';
+          statusEl && (statusEl.textContent = msg);
         }
       }
       function stopScan(){
@@ -1560,15 +1788,11 @@ if (clearSearchBtn) {
 
 
     function applySearch() {
-
-
-
       const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
       const rows = document.querySelectorAll('#stockTable tbody tr');
       rows.forEach(r => {
         const code = (r.children[0].innerText || '').toLowerCase();
         r.dataset.searchMatch = code.includes(q) ? '1' : '0';
-        r.style.display = (r.dataset.searchMatch === '1' && (r.dataset.typeMatch ?? '1') === '1') ? '' : 'none';
       });
     }
 
@@ -1577,10 +1801,7 @@ if (clearSearchBtn) {
       const rows = document.querySelectorAll('#stockTable tbody tr');
       rows.forEach(r => {
         const type = (r.children[1].innerText || '').trim();
-
-
         r.dataset.typeMatch = (t === '' || type === t) ? '1' : '0';
-        r.style.display = (r.dataset.typeMatch === '1' && (r.dataset.searchMatch ?? '1') === '1') ? '' : 'none';
       });
     }
 
