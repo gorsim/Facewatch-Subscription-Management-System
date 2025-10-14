@@ -1533,10 +1533,36 @@ if (clearSearchBtn) {
             // Clean up flags
             sessionStorage.removeItem('qrbotLaunched');
             sessionStorage.removeItem('qrbotLaunchTime');
-            sessionStorage.removeItem('scanReturnDate');
 
-            // Show alert to user
-            alert('QRbot returned without scan data. Please try scanning again or check if QRbot has permission to return to Safari.');
+            // Restore the date
+            const savedDate = sessionStorage.getItem('scanReturnDate');
+            if (savedDate) {
+              console.log('✓ Restoring date from sessionStorage:', savedDate);
+              const dateInput = document.getElementById('countDate');
+              if (dateInput) {
+                dateInput.value = savedDate;
+                try { localStorage.setItem('countDate', savedDate); } catch(e) {}
+              }
+              sessionStorage.removeItem('scanReturnDate');
+            }
+
+            // Offer manual input as fallback
+            const manualCode = prompt('QRbot did not return scan data.\n\nIf you scanned a barcode, please enter the code manually (e.g., 2502CA1A73):');
+            if (manualCode && manualCode.trim()) {
+              console.log('✓ User entered manual code:', manualCode);
+              sessionStorage.setItem('pendingScanCode', manualCode.trim());
+
+              // Trigger data load and scan processing
+              (function callEnsureSafely(){
+                const fn = window.ensureGenerated;
+                if (typeof fn === 'function') {
+                  console.log('✓ Calling ensureGenerated() for manual code');
+                  fn();
+                } else {
+                  setTimeout(callEnsureSafely, 100);
+                }
+              })();
+            }
           }
         }
 
