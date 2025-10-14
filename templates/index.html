@@ -1854,6 +1854,18 @@ if (clearSearchBtn) {
         document.getElementById('saveActions').style.display = 'none';
         document.getElementById('controlsChip').style.display = 'none';
         totalPhysical = 0; totalMissing = 0; updateTotalsUI();
+
+        // Reset the Past Counts dropdown to blank
+        const dateHistorySelect = document.getElementById('dateHistory');
+        if (dateHistorySelect) {
+          dateHistorySelect.value = '';
+        }
+
+        // Reset file names and cached data so next load works properly
+        deliveredName = null;
+        installedName = null;
+        theoreticalStockData = [];
+
         statusEl.textContent = 'Stock List closed.';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
