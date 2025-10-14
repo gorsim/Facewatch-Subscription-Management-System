@@ -667,7 +667,9 @@
         }
 
         // If no saved data, check if we need to generate fresh data
+        console.log('🔍 Checking table state. Has rows:', table && table.tBodies[0] && table.tBodies[0].children.length > 0);
         if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
+          console.log('✓ Table has rows, hydrating and processing...');
           // Rows already present (e.g., from guaranteed flush). Finish full UI init here.
           try {
             const tbody = table.tBodies[0];
@@ -699,8 +701,15 @@
               const cc = document.getElementById('controlsChip'); if (cc) cc.style.display = 'inline-flex';
             } catch(_) {}
           } catch(_) {}
+
+          // Process pending scan even if table was already loaded
+          console.log('✓ Table was already loaded, checking for pending scan...');
+          if (window.processPendingScan) {
+            window.processPendingScan();
+          }
           return;
         }
+        console.log('🔍 Checking file names. deliveredName:', deliveredName, 'installedName:', installedName);
         if (!deliveredName || !installedName) {
           try {
             const resp = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
@@ -711,7 +720,14 @@
             }
           } catch {}
         }
-        if (!deliveredName || !installedName) return;
+        if (!deliveredName || !installedName) {
+          console.log('⚠️ No file names available, cannot generate. Checking for pending scan anyway...');
+          // Even if we can't load data, process pending scan in case table was already loaded
+          if (window.processPendingScan) {
+            window.processPendingScan();
+          }
+          return;
+        }
         try {
           // For past counts, try to use saved theoretical stock data first
           const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
