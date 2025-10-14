@@ -233,7 +233,6 @@
         </span>
         <span class="chip" id="controlsChip" style="margin-left:auto; display:none">
           <button id="closeBtn" class="secondary">Close</button>
-          <button id="finishBtn" class="danger">Save and Close</button>
         </span>
       </div>
     <script>
@@ -1644,7 +1643,7 @@ if (clearSearchBtn) {
             }).catch(err => {
               console.error('Failed to save batch import changes:', err);
               if (resultDiv) {
-                const errorMsg = '<div style="margin-top:8px; color:#ef4444; font-size:12px;">⚠ Failed to save - please click "Close & Save" at bottom</div>';
+                const errorMsg = '<div style="margin-top:8px; color:#ef4444; font-size:12px;">⚠ Failed to save - please try again or use "Close" button to save manually</div>';
                 resultDiv.innerHTML += errorMsg;
               }
             });
@@ -1833,41 +1832,46 @@ if (clearSearchBtn) {
       }
     });
 
-    // Save and Close: saves state, then resets UI
-    document.getElementById('finishBtn').addEventListener('click', async () => {
-      try {
-        await saveStateNow();
-        hasUnsavedChanges = false;
-      } catch {}
-      document.getElementById('stockTable').style.display = 'none';
-      document.querySelector('#stockTable tbody').innerHTML = '';
-      document.getElementById('summary').style.display = 'none';
-      document.getElementById('anomalies').style.display = 'none';
-      document.getElementById('saveActions').style.display = 'none';
-      document.getElementById('controlsChip').style.display = 'none';
-      totalPhysical = 0; totalMissing = 0; updateTotalsUI();
-      statusEl.textContent = 'Stock List closed.';
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    // Close: confirm if unsaved changes, then hide UI without saving
-    document.getElementById('closeBtn').addEventListener('click', () => {
-      if (hasUnsavedChanges) {
-        const ok = confirm('You have unsaved changes. Close without saving?');
-        if (!ok) return;
-        // Clear any pending auto-save timer to prevent saving after close
-        clearTimeout(saveTimer);
-        hasUnsavedChanges = false;
+    // Close: ask to save if there are unsaved changes
+    document.getElementById('closeBtn').addEventListener('click', async () => {
+      // Function to close and reset UI
+      function closeAndResetUI() {
+        document.getElementById('stockTable').style.display = 'none';
+        document.querySelector('#stockTable tbody').innerHTML = '';
+        document.getElementById('summary').style.display = 'none';
+        document.getElementById('anomalies').style.display = 'none';
+        document.getElementById('saveActions').style.display = 'none';
+        document.getElementById('controlsChip').style.display = 'none';
+        totalPhysical = 0; totalMissing = 0; updateTotalsUI();
+        statusEl.textContent = 'Stock List closed.';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      document.getElementById('stockTable').style.display = 'none';
-      document.querySelector('#stockTable tbody').innerHTML = '';
-      document.getElementById('summary').style.display = 'none';
-      document.getElementById('anomalies').style.display = 'none';
-      document.getElementById('saveActions').style.display = 'none';
-      document.getElementById('controlsChip').style.display = 'none';
-      totalPhysical = 0; totalMissing = 0; updateTotalsUI();
-      statusEl.textContent = 'Stock List closed.';
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Check if there are unsaved changes
+      if (hasUnsavedChanges) {
+        // Ask user if they want to save
+        const userChoice = confirm('Do you want to save changes before closing?\n\nClick OK to Save and Close\nClick Cancel to Close without saving');
+
+        if (userChoice) {
+          // User clicked OK - Save and Close
+          try {
+            await saveStateNow();
+            hasUnsavedChanges = false;
+            statusEl.textContent = 'Saved successfully.';
+          } catch (err) {
+            console.error('Failed to save:', err);
+            alert('Failed to save changes. Please try again.');
+            return; // Don't close if save failed
+          }
+        } else {
+          // User clicked Cancel - Close without saving
+          clearTimeout(saveTimer); // Clear any pending auto-save
+          hasUnsavedChanges = false;
+        }
+      }
+
+      // Close and reset UI
+      closeAndResetUI();
     });
 
 
