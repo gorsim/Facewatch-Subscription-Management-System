@@ -369,6 +369,7 @@
         const sel = document.getElementById('dateHistory');
         sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
         sel.addEventListener('change', () => {
+          console.log('📅 Past Counts dropdown changed to:', sel.value);
           if (sel.value) {
             // Set skip flag to prevent date input's change handler from firing
             el.dataset.skipChangeEvent = 'true';
@@ -662,6 +663,7 @@
       // Ensure results are generated for selected date (uses last uploaded files)
       async function ensureGenerated() {
         console.log('🔧 ensureGenerated called for date:', getSelectedDate());
+        console.trace('Call stack:');
         const table = document.getElementById('stockTable');
         // Always check for saved data first, regardless of table state
         try {
