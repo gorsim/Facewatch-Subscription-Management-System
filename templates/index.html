@@ -1451,7 +1451,7 @@ if (clearSearchBtn) {
       try {
         const batchImportBtn = document.getElementById('batchImportBtn');
         const modal = document.getElementById('batchImportModal');
-        const cancelBtn = document.getElementById('batchImportCancel');
+        const closeBtn = document.getElementById('batchImportClose');
         const processBtn = document.getElementById('batchImportProcess');
         const inputArea = document.getElementById('batchImportInput');
         const resultDiv = document.getElementById('batchImportResult');
@@ -1461,6 +1461,8 @@ if (clearSearchBtn) {
           return;
         }
 
+        let hasUnsavedChanges = false;
+
         // Open modal
         batchImportBtn && batchImportBtn.addEventListener('click', () => {
           if (modal) {
@@ -1468,18 +1470,28 @@ if (clearSearchBtn) {
             if (inputArea) inputArea.value = '';
             if (inputArea) inputArea.focus();
             if (resultDiv) resultDiv.style.display = 'none';
+            hasUnsavedChanges = false;
           }
         });
 
-        // Close modal
-        cancelBtn && cancelBtn.addEventListener('click', () => {
+        // Close modal with save confirmation
+        function closeModal() {
+          if (hasUnsavedChanges) {
+            if (confirm('Do you want to save changes before closing?')) {
+              saveCurrentState();
+            }
+          }
           if (modal) modal.classList.remove('show');
-        });
+          hasUnsavedChanges = false;
+        }
+
+        // Close button
+        closeBtn && closeBtn.addEventListener('click', closeModal);
 
         // Close on background click
         modal && modal.addEventListener('click', (e) => {
           if (e.target === modal) {
-            modal.classList.remove('show');
+            closeModal();
           }
         });
 
@@ -1606,10 +1618,29 @@ if (clearSearchBtn) {
             resultDiv.style.display = 'block';
           }
 
+          // Mark that we have changes if any were ticked
+          if (results.ticked.length > 0) {
+            hasUnsavedChanges = true;
+
+            // Auto-save after processing
+            console.log('Auto-saving batch import changes...');
+            saveCurrentState();
+            hasUnsavedChanges = false;
+
+            // Show save confirmation in results
+            if (resultDiv) {
+              const saveMsg = '<div style="margin-top:8px; color:#10b981; font-size:12px;">✓ Changes saved automatically</div>';
+              resultDiv.innerHTML += saveMsg;
+            }
+          }
+
           // Auto-close modal after 3 seconds if all were found
           if (results.notFound.length === 0 && results.invalid.length === 0) {
             setTimeout(() => {
-              if (modal) modal.classList.remove('show');
+              if (modal) {
+                modal.classList.remove('show');
+                hasUnsavedChanges = false;
+              }
             }, 3000);
           }
         });
@@ -1888,7 +1919,7 @@ if (clearSearchBtn) {
 ..."></textarea>
       <div id="batchImportResult" class="result" style="display:none;"></div>
       <div class="modal-actions">
-        <button id="batchImportCancel" class="secondary">Cancel</button>
+        <button id="batchImportClose" class="secondary">Close</button>
         <button id="batchImportProcess">Process & Tick</button>
       </div>
     </div>
