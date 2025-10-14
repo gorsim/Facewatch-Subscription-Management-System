@@ -1507,19 +1507,21 @@ if (clearSearchBtn) {
           return null;
         }
 
-        // Mark row as ticked
+        // Mark row as ticked - returns true if ticked, false if already ticked or disabled
         function markRow(tr){
           const cb = tr.querySelector('.physical-checkbox');
           if (cb && !cb.checked && !cb.disabled) {
             const prev = cb.checked;
             cb.checked = true;
             if (prev !== cb.checked) cb.dispatchEvent(new Event('change', {bubbles:true}));
+            tr.classList.add('scan-hit');
+            setTimeout(()=>tr.classList.remove('scan-hit'), 1200);
+            const cardsEl = document.getElementById('cardList');
+            if (cardsEl && cardsEl.style.display !== 'none') { renderCardsFromTable(); }
+            try { navigator.vibrate && navigator.vibrate(30); } catch(_) {}
+            return true; // Successfully ticked
           }
-          tr.classList.add('scan-hit');
-          setTimeout(()=>tr.classList.remove('scan-hit'), 1200);
-          const cardsEl = document.getElementById('cardList');
-          if (cardsEl && cardsEl.style.display !== 'none') { renderCardsFromTable(); }
-          try { navigator.vibrate && navigator.vibrate(30); } catch(_) {}
+          return false; // Already ticked or disabled
         }
 
         // Process batch import
@@ -1534,13 +1536,22 @@ if (clearSearchBtn) {
 
           const results = {
             total: lines.length,
-            found: [],
+            ticked: [],
+            alreadyTicked: [],
             notFound: [],
             invalid: []
           };
 
+          // Process unique codes only (remove duplicates)
+          const uniqueCodes = new Map(); // code -> first occurrence line
           lines.forEach(line => {
             const code = parseCameraCode(line);
+            if (code && !uniqueCodes.has(code)) {
+              uniqueCodes.set(code, line);
+            }
+          });
+
+          uniqueCodes.forEach((line, code) => {
             if (!code) {
               results.invalid.push(line);
               return;
@@ -1548,8 +1559,12 @@ if (clearSearchBtn) {
 
             const tr = findRowByCode(code);
             if (tr) {
-              markRow(tr);
-              results.found.push(code);
+              const wasTicked = markRow(tr);
+              if (wasTicked) {
+                results.ticked.push(code);
+              } else {
+                results.alreadyTicked.push(code);
+              }
             } else {
               results.notFound.push(code);
             }
@@ -1557,7 +1572,12 @@ if (clearSearchBtn) {
 
           // Show results
           let html = '<div>';
-          html += `<div class="success">✓ Found and ticked: ${results.found.length} cameras</div>`;
+          if (results.ticked.length > 0) {
+            html += `<div class="success">✓ Newly ticked: ${results.ticked.length} cameras</div>`;
+          }
+          if (results.alreadyTicked.length > 0) {
+            html += `<div style="color:#94a3b8;">⊙ Already ticked: ${results.alreadyTicked.length} cameras (skipped)</div>`;
+          }
           if (results.notFound.length > 0) {
             html += `<div class="error">✗ Not found: ${results.notFound.length} cameras</div>`;
             html += `<div style="margin-top:8px; font-size:12px; color:#94a3b8;">Not found: ${results.notFound.join(', ')}</div>`;
@@ -1566,6 +1586,12 @@ if (clearSearchBtn) {
             html += `<div class="error">✗ Invalid codes: ${results.invalid.length}</div>`;
             html += `<div style="margin-top:8px; font-size:12px; color:#94a3b8;">Invalid: ${results.invalid.join(', ')}</div>`;
           }
+
+          const duplicateCount = lines.length - uniqueCodes.size;
+          if (duplicateCount > 0) {
+            html += `<div style="margin-top:8px; color:#64748b; font-size:12px;">ℹ️ Ignored ${duplicateCount} duplicate scan(s)</div>`;
+          }
+
           html += '</div>';
 
           resultDiv.innerHTML = html;
