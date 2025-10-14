@@ -1618,6 +1618,16 @@ if (clearSearchBtn) {
             resultDiv.style.display = 'block';
           }
 
+          // Recalculate totals after ticking checkboxes
+          if (results.ticked.length > 0 || results.alreadyTicked.length > 0) {
+            try {
+              recalcTotals();
+              console.log('✓ Totals recalculated after batch import');
+            } catch(e) {
+              console.error('Failed to recalculate totals:', e);
+            }
+          }
+
           // Mark that we have changes if any were ticked
           if (results.ticked.length > 0) {
             hasUnsavedChanges = true;
