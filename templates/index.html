@@ -169,9 +169,8 @@
         <div class="box"><div class="muted">Total Installed</div><div id="sumInstalled" style="font-weight:700"></div></div>
         <div class="box"><div class="muted">Total Physical Count</div><div id="sumPhysical" style="font-weight:700"></div></div>
         <div class="box"><div class="muted">Total Missing</div><div id="sumMissing" style="font-weight:700"></div></div>
-        <div class="box" style="display:flex; gap:8px; align-items:center;">
-          <button id="saveBtn" class="primary" style="font-size:14px; padding:8px 16px;">💾 Save</button>
-          <button id="refreshBtn" class="secondary" style="font-size:14px; padding:8px 16px;">🔄 Refresh</button>
+        <div class="box" style="display:flex; align-items:center;">
+          <button id="saveRefreshBtn" class="primary" style="font-size:14px; padding:8px 16px;">💾 Save and Refresh</button>
         </div>
       </div>
 
@@ -1913,45 +1912,34 @@ if (clearSearchBtn) {
       }
     });
 
-    // Save button: manually save current state
-    document.getElementById('saveBtn').addEventListener('click', async () => {
+    // Save and Refresh button: save current state then reload data
+    document.getElementById('saveRefreshBtn').addEventListener('click', async () => {
       try {
+        const currentDate = getSelectedDate();
+
+        // Step 1: Save
         statusEl.textContent = 'Saving...';
         await saveStateNow();
         hasUnsavedChanges = false;
-        statusEl.textContent = '✓ Changes saved successfully';
 
-        // Refresh the Past Counts dropdown to include the newly saved date
+        // Step 2: Refresh the Past Counts dropdown
         try {
           await refreshDateHistory();
           window.populateBringForwardDates && window.populateBringForwardDates();
         } catch(e) {
           console.error('Failed to refresh date dropdowns:', e);
         }
-      } catch (err) {
-        console.error('Failed to save:', err);
-        statusEl.textContent = '⚠ Failed to save changes';
-        alert('Failed to save changes. Please try again.');
-      }
-    });
 
-    // Refresh button: reload data from server for current date
-    document.getElementById('refreshBtn').addEventListener('click', async () => {
-      try {
+        // Step 3: Reload data from server
         statusEl.textContent = 'Refreshing...';
-        const currentDate = getSelectedDate();
-
-        // Clear cached data to force fresh load
         theoreticalStockData = [];
-
-        // Reload data for current date
         await ensureGenerated();
 
-        statusEl.textContent = '✓ Data refreshed for ' + currentDate;
+        statusEl.textContent = '✓ Saved and refreshed for ' + currentDate;
       } catch (err) {
-        console.error('Failed to refresh:', err);
-        statusEl.textContent = '⚠ Failed to refresh data';
-        alert('Failed to refresh data. Please try again.');
+        console.error('Failed to save and refresh:', err);
+        statusEl.textContent = '⚠ Failed to save and refresh';
+        alert('Failed to save and refresh. Please try again.');
       }
     });
 
