@@ -85,7 +85,14 @@
           try {
             const detailRes = await fetch('/load_physical_state?date=' + encodeURIComponent(date));
             const detail = await detailRes.json();
-            const itemCount = (detail && detail.theoretical_stock) ? detail.theoretical_stock.length : 0;
+
+            // Count how many items were physically counted (checked)
+            let itemCount = 0;
+            if (detail && detail.physical_counts) {
+              const physicalCounts = detail.physical_counts;
+              itemCount = Object.values(physicalCounts).filter(v => v === 1 || v === true).length;
+            }
+
             counts.push({ date, itemCount });
           } catch (e) {
             counts.push({ date, itemCount: 0 });
