@@ -196,6 +196,17 @@ def _add_date_to_index(date_str):
     except Exception:
         pass
 
+def _remove_date_from_index(date_str):
+    try:
+        if not isinstance(date_str, str):
+            return
+        arr = _get_dates_index_cached()
+        if date_str in arr:
+            arr.remove(date_str)
+            _set_dates_index(arr)
+    except Exception:
+        pass
+
 
 
 def is_api_request():
@@ -417,6 +428,9 @@ def delete_count():
                 os.remove(filepath)
             else:
                 return jsonify({'error': 'Count not found'}), 404
+
+        # Remove the date from the index cache
+        _remove_date_from_index(date)
 
         return jsonify({'success': True, 'message': f'Deleted count for {date}'})
 
