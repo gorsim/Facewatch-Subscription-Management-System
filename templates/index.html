@@ -104,6 +104,11 @@
           <select id="bringForwardDate"><option value="">—</option></select>
           <button id="bringForwardBtn" class="secondary" title="Copy Locations & Notes into blanks only">Apply</button>
         </span>
+        <span class="chip">
+          <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+            <input type="checkbox" id="showMissingOnly" /> Show Missing Only
+          </label>
+        </span>
 
         <span class="chip" id="pageControls" style="display:none">
           <button id="prevPage">Prev</button>
@@ -126,7 +131,7 @@
           <button id="logoutBtn" class="secondary">Logout</button>
         </span>
       </div>
-      <div class="grid">
+      <div class="grid" id="uploadSection" {% if user_role != 'admin' %}style="display:none"{% endif %}>
         <div>
           <label>INPUT Stock Delivered (CSV)</label>
           <input id="delivered" type="file" accept=".csv" />
@@ -137,17 +142,14 @@
         </div>
       </div>
       <div class="actions">
-        <button id="uploadBtn">Upload Files</button>
-        <button id="generateBtn" class="secondary" disabled>GENERATE STOCK LIST</button>
+        <button id="uploadBtn" {% if user_role != 'admin' %}style="display:none"{% endif %}>Upload Files</button>
+        <button id="generateBtn" class="secondary" {% if user_role != 'admin' %}style="display:none"{% else %}disabled{% endif %}>GENERATE STOCK LIST</button>
         <button id="batchImportBtn" class="secondary" title="Import multiple scanned barcodes">📋 Batch Import Scans</button>
         <div class="search">
           <span style="position:relative; display:inline-flex; align-items:center;">
             <input id="searchInput" type="text" placeholder="Filter by Camera Code" style="padding-right:28px;" />
             <button id="clearSearch" class="secondary" title="Clear" style="position:absolute; right:4px; display:none; width:22px; height:24px; line-height:18px;">×</button>
           </span>
-          <label style="display:flex; align-items:center; gap:8px;">
-            Show Missing Only <input type="checkbox" id="showMissingOnly" />
-          </label>
           <label style="display:flex; align-items:center; gap:8px;">
             Cam Type:
             <select id="typeFilter">

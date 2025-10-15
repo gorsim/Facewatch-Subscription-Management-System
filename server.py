@@ -504,7 +504,8 @@ def read_csv_flex(path):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    user_role = session.get('role', 'user')
+    return render_template('index.html', user_role=user_role)
 
 
 @app.route('/locations')
