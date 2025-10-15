@@ -381,6 +381,48 @@ def support_page():
         return redirect(url_for('login', next=request.url))
     return render_template('support.html')
 
+@app.route('/past_counts')
+def past_counts_page():
+    if not session.get('logged_in'):
+        return redirect(url_for('login', next=request.url))
+    return render_template('past_counts.html')
+
+@app.route('/delete_count', methods=['POST'])
+def delete_count():
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    try:
+        data = request.get_json()
+        date = data.get('date')
+
+        if not date:
+            return jsonify({'error': 'Date is required'}), 400
+
+        # Delete the physical state file for this date
+        filename = f"physical_state_{date}.json"
+
+        if USE_S3:
+            s3 = _get_s3()
+            if s3:
+                try:
+                    s3.delete_object(Bucket=S3_BUCKET, Key=_s3_key(filename))
+                except Exception as e:
+                    return jsonify({'error': f'Failed to delete from S3: {str(e)}'}), 500
+            else:
+                return jsonify({'error': 'S3 not configured'}), 500
+        else:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            else:
+                return jsonify({'error': 'Count not found'}), 404
+
+        return jsonify({'success': True, 'message': f'Deleted count for {date}'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/users/manage')
 def users_page():
     if not session.get('logged_in') or session.get('role') != 'admin':

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Past Counts | Camera Stock Control</title>
+  <style>
+    :root { --bg: #0a0f1a; --panel: #0b1220; --text: #e5e7eb; --muted: #94a3b8; --border: #1f2937; --accent: #2563eb; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 24px; }
+    h1 { margin:0 0 8px; }
+    a { color: var(--accent); text-decoration: none; }
+    .muted { color: var(--muted); }
+
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom: 16px; }
+    button { background:#111827; color:#e5e7eb; border:1px solid #334155; padding:6px 10px; border-radius:8px; cursor:pointer; }
+    button.primary { background:#1e293b; border-color:#475569; }
+    button.danger { background:#7f1d1d; border-color:#b91c1c; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    table { width:100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #1f2937; padding: 12px 8px; text-align: left; }
+    th { color:#94a3b8; font-weight:600; }
+    tr:hover { background: rgba(37, 99, 235, 0.05); }
+    
+    .date-cell { font-weight: 600; font-size: 15px; }
+    .count-cell { color: var(--muted); font-size: 14px; }
+    .actions-cell { text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Past Counts</h1>
+      <p class="muted">View and manage saved stock count dates. Delete counts that are no longer needed.</p>
+      
+      <div class="row">
+        <a href="/">← Back to Stock Control</a>
+        <button id="refreshBtn" class="primary">🔄 Refresh</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Items Counted</th>
+            <th style="width:120px; text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="countsBody">
+          <tr><td colspan="3" class="muted" style="text-align:center; padding:24px;">Loading...</td></tr>
+        </tbody>
+      </table>
+
+      <div id="status" class="muted" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const tbody = document.getElementById('countsBody');
+
+    function setStatus(msg) { 
+      statusEl.textContent = msg || ''; 
+    }
+
+    async function loadCounts() {
+      setStatus('Loading past counts...');
+      tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:24px;">Loading...</td></tr>';
+      
+      try {
+        const res = await fetch('/list_count_dates');
+        const data = await res.json();
+        
+        if (!data.dates || data.dates.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:24px;">No past counts found.</td></tr>';
+          setStatus('');
+          return;
+        }
+
+        // Load details for each date
+        const counts = [];
+        for (const date of data.dates) {
+          try {
+            const detailRes = await fetch('/load_physical_state?date=' + encodeURIComponent(date));
+            const detail = await detailRes.json();
+            const itemCount = (detail && detail.theoretical_stock) ? detail.theoretical_stock.length : 0;
+            counts.push({ date, itemCount });
+          } catch (e) {
+            counts.push({ date, itemCount: 0 });
+          }
+        }
+
+        renderCounts(counts);
+        setStatus('');
+      } catch (err) {
+        console.error('Failed to load counts:', err);
+        tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center; padding:24px;">Failed to load counts.</td></tr>';
+        setStatus('⚠ Failed to load counts');
+      }
+    }
+
+    function renderCounts(counts) {
+      tbody.innerHTML = '';
+      
+      counts.forEach(({ date, itemCount }) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="date-cell">${date}</td>
+          <td class="count-cell">${itemCount} items</td>
+          <td class="actions-cell">
+            <button class="danger deleteBtn" data-date="${date}">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function deleteCount(date) {
+      if (!confirm(`Are you sure you want to delete the count for ${date}?\n\nThis action cannot be undone.`)) {
+        return;
+      }
+
+      setStatus('Deleting...');
+      
+      try {
+        const res = await fetch('/delete_count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date })
+        });
+
+        const data = await res.json();
+        
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Failed to delete count');
+        }
+
+        setStatus(`✓ Deleted count for ${date}`);
+        await loadCounts();
+      } catch (err) {
+        console.error('Failed to delete count:', err);
+        setStatus('⚠ Failed to delete count: ' + err.message);
+        alert('Failed to delete count: ' + err.message);
+      }
+    }
+
+    // Event delegation for delete buttons
+    tbody.addEventListener('click', (e) => {
+      if (e.target.classList.contains('deleteBtn')) {
+        const date = e.target.dataset.date;
+        if (date) deleteCount(date);
+      }
+    });
+
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', loadCounts);
+
+    // Initial load
+    loadCounts();
+  </script>
+</body>
+</html>
+

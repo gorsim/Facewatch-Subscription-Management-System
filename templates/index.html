@@ -98,7 +98,6 @@
         <span class="chip" id="dateHistoryWrap">
           Past counts:
           <select id="dateHistory"><option value="">—</option></select>
-          <button id="refreshDates" class="secondary" title="Refresh saved count dates">↻</button>
         </span>
         <span class="chip" id="bringForwardWrap">
           Bring notes fwd:
@@ -123,6 +122,7 @@
           <button id="supportBtn" class="secondary">Support</button>
           <button id="accountBtn" class="secondary">Account</button>
           <button id="manageUsersBtn" class="secondary" style="display:none">Users</button>
+          <button id="pastCountsBtn" class="secondary">Past Counts</button>
           <button id="logoutBtn" class="secondary">Logout</button>
         </span>
       </div>
@@ -637,8 +637,6 @@
         // Expose for other code (after save)
         window.populateBringForwardDates = populate;
         populate();
-        const refresh = document.getElementById('refreshDates');
-        if (refresh) refresh.addEventListener('click', populate);
 
         async function bringForward(dateStr){
           if (!dateStr) return;
@@ -1503,12 +1501,13 @@ if (clearSearchBtn) {
     document.getElementById('untickByLocation').addEventListener('click', () => setByLocation(false));
 
     document.getElementById('exportCsv').addEventListener('click', exportCsv);
-    // Account + Users + Support + Logout buttons
+    // Account + Users + Support + Past Counts + Logout buttons
     (function(){
       const b=document.getElementById('logoutBtn'); if(b){ b.addEventListener('click', ()=>{ window.location.href='/logout'; }); }
       const u=document.getElementById('manageUsersBtn'); if(u){ u.addEventListener('click', ()=>{ window.location.href='/users/manage'; }); }
       const a=document.getElementById('accountBtn'); if(a){ a.addEventListener('click', ()=>{ window.location.href='/account'; }); }
       const s=document.getElementById('supportBtn'); if(s){ s.addEventListener('click', ()=>{ window.location.href='/support'; }); }
+      const p=document.getElementById('pastCountsBtn'); if(p){ p.addEventListener('click', ()=>{ window.location.href='/past_counts'; }); }
       // Hide Users button for non-admins by probing /users (server still protects)
       fetch('/users', {headers:{'Accept':'application/json'}}).then(r=>{
         if (r.status===200) { u && (u.style.display=''); }
