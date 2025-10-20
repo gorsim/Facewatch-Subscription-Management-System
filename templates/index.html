@@ -162,6 +162,12 @@
               <option value="">All</option>
             </select>
           </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            PO:
+            <select id="poFilter">
+              <option value="">All</option>
+            </select>
+          </label>
         </div>
       </div>
       <div id="status" class="muted" style="margin-top:10px;"></div>
@@ -767,7 +773,7 @@
             // Hydrate saved ticks/notes/locations, then recompute totals before filters/pagination
             await hydrateFromSavedState();
             recalcTotals();
-            try { applySearch(); applyTypeFilter(); applyLocationFilter(); } catch(_) {}
+            try { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); } catch(_) {}
             renderCardsFromTable();
             applyMissingFilter();
             applyPagination();
@@ -859,19 +865,21 @@
         const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
         const t = document.getElementById('typeFilter')?.value || '';
         const lf = document.getElementById('locationFilter')?.value || '';
+        const pf = document.getElementById('poFilter')?.value || '';
 
         let visibleRows = rows;
         // Fast path: no filters means all rows are candidates
-        if (q || t || lf || showMissing) {
+        if (q || t || lf || pf || showMissing) {
           visibleRows = rows.filter(r => {
             const matchSearch = (r.dataset.searchMatch ?? '1') === '1';
             const matchType = (r.dataset.typeMatch ?? '1') === '1';
             const matchLoc = (r.dataset.locMatch ?? '1') === '1';
+            const matchPO = (r.dataset.poMatch ?? '1') === '1';
             const matchMissing = !showMissing || (parseInt(r.dataset.missing || '0') > 0);
-            return matchSearch && matchType && matchLoc && matchMissing;
+            return matchSearch && matchType && matchLoc && matchPO && matchMissing;
           });
           // Safari/iPad guard: if filters are effectively empty but we got a tiny set, fall back to all
-          if (!q && !t && !lf && showMissing === false && visibleRows.length < 0.5 * rows.length) {
+          if (!q && !t && !lf && !pf && showMissing === false && visibleRows.length < 0.5 * rows.length) {
             visibleRows = rows;
           }
         }
@@ -1060,6 +1068,21 @@
       // Ensure default to All on initial render
       try { locationFilter.value = ''; } catch(_) {}
 
+      // Populate PO filter
+      const poFilter = document.getElementById('poFilter');
+      const poSet = new Set(['']);
+      data.theoretical_stock.forEach(r => {
+        if (r.po) poSet.add(r.po);
+      });
+      poFilter.innerHTML = '';
+      [...poSet].sort().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p || 'All';
+        poFilter.appendChild(opt);
+      });
+      // Ensure default to All on initial render
+      try { poFilter.value = ''; } catch(_) {}
+
       // Progressive row rendering for mobile Safari performance (await completion)
       await new Promise((resolve) => {
         const rows = data.theoretical_stock || [];
@@ -1092,6 +1115,7 @@
             tr.dataset.searchMatch = '1';
             tr.dataset.typeMatch = '1';
             tr.dataset.locMatch = '1';
+            tr.dataset.poMatch = '1';
             frag.appendChild(tr);
           }
           tbody.appendChild(frag);
@@ -1133,6 +1157,7 @@
                 tr.dataset.searchMatch = '1';
                 tr.dataset.typeMatch = '1';
                 tr.dataset.locMatch = '1';
+                tr.dataset.poMatch = '1';
                 frag.appendChild(tr);
                 if ((++n) % SAFE_BATCH === 0) { tbody.appendChild(frag); frag = document.createDocumentFragment(); }
               }
@@ -1217,7 +1242,7 @@
       // Default the search box to empty on initial render to avoid stale filtering
       try { const si = document.getElementById('searchInput'); if (si && !si.dataset.initialized) { si.value = ''; si.dataset.initialized = '1'; } } catch(_){}
       // Apply filters explicitly to ensure clean "All" defaults
-      try { applySearch(); applyTypeFilter(); applyLocationFilter(); } catch(_){}
+      try { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); } catch(_){}
       try {
         const tbody = document.querySelector('#stockTable tbody');
         const rowsAll = Array.from(tbody.querySelectorAll('tr'));
@@ -1258,16 +1283,17 @@
     (function(){
       const searchBtnEl = document.getElementById('searchBtn');
       if (searchBtnEl) {
-        searchBtnEl.addEventListener('click', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
+        searchBtnEl.addEventListener('click', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); page = 1; applyPagination(); });
       }
     })();
-    document.getElementById('typeFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); });
-    document.getElementById('locationFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); });
+    document.getElementById('typeFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); page = 1; applyPagination(); updateTotalsUI(); });
+    document.getElementById('locationFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); page = 1; applyPagination(); updateTotalsUI(); });
+    document.getElementById('poFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); page = 1; applyPagination(); updateTotalsUI(); });
 
 // Live search + clear button
 const searchInputEl = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearch');
-function runSearchPipeline() { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); }
+function runSearchPipeline() { applySearch(); applyTypeFilter(); applyLocationFilter(); applyPOFilter(); page = 1; applyPagination(); updateTotalsUI(); }
 if (searchInputEl) {
   searchInputEl.addEventListener('input', () => {
     runSearchPipeline();
@@ -1302,6 +1328,15 @@ if (clearSearchBtn) {
       });
     }
 
+    function applyPOFilter() {
+      const pf = document.getElementById('poFilter').value || '';
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+      rows.forEach(r => {
+        const po = (r.children[2].innerText || '').trim(); // PO is in 3rd column (index 2)
+        r.dataset.poMatch = (pf === '' || po === pf) ? '1' : '0';
+      });
+    }
+
 
     function recalcTotals() {
       totalPhysical = 0;
@@ -1323,11 +1358,12 @@ if (clearSearchBtn) {
       const q = (document.getElementById('searchInput')?.value || '').trim();
       const typeVal = document.getElementById('typeFilter')?.value || '';
       const locVal = document.getElementById('locationFilter')?.value || '';
+      const poVal = document.getElementById('poFilter')?.value || '';
       const showMissing = document.getElementById('showMissingOnly')?.checked;
 
-      const hasFilters = q || typeVal || locVal || showMissing;
+      const hasFilters = q || typeVal || locVal || poVal || showMissing;
 
-      console.log('updateTotalsUI called, hasFilters:', hasFilters, 'typeVal:', typeVal, 'locVal:', locVal);
+      console.log('updateTotalsUI called, hasFilters:', hasFilters, 'typeVal:', typeVal, 'locVal:', locVal, 'poVal:', poVal);
 
       // Debug: check first row's dataset
       const firstRow = document.querySelector('#stockTable tbody tr');
@@ -1350,9 +1386,10 @@ if (clearSearchBtn) {
           const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
           const matchType = (tr.dataset.typeMatch ?? '1') === '1';
           const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
+          const matchPO = (tr.dataset.poMatch ?? '1') === '1';
           const matchMissing = !showMissing || (parseInt(tr.dataset.missing || '0') > 0);
 
-          if (matchSearch && matchType && matchLoc && matchMissing) {
+          if (matchSearch && matchType && matchLoc && matchPO && matchMissing) {
             const theoretical = parseInt(tr.dataset.theoretical || '0');
             const installed = parseInt(tr.dataset.installed || '0');
             const physical = tr.querySelector('.physical-checkbox')?.checked ? 1 : 0;
