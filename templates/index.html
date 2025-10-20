@@ -1076,6 +1076,7 @@
             const missing = Math.max(0, (row.theoretical_stock||0) - physical);
             const disabled = (row.theoretical_stock||0) <= 0;
             tr.dataset.theoretical = String(row.theoretical_stock||0);
+            tr.dataset.installed = String(row.installed||0);
             tr.innerHTML = `
               <td>${row.camera_code}</td>
               <td>${row.cam_type || ''}</td>
@@ -1117,6 +1118,7 @@
                 const missing = Math.max(0, (row.theoretical_stock||0) - physical);
                 const disabled = (row.theoretical_stock||0) <= 0;
                 tr.dataset.theoretical = String(row.theoretical_stock||0);
+                tr.dataset.installed = String(row.installed||0);
                 tr.innerHTML = `
                   <td>${row.camera_code}</td>
                   <td>${row.cam_type || ''}</td>
@@ -1356,10 +1358,19 @@ if (clearSearchBtn) {
         document.getElementById('sumPhysical').innerText = filteredPhysical;
         document.getElementById('sumMissing').innerText = filteredMissing;
       } else {
-        // No filters - use global totals
+        // No filters - calculate totals from all rows
+        let totalDelivered = 0;
+        let totalInstalled = 0;
+
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          totalDelivered += parseInt(tr.dataset.theoretical || '0');
+          totalInstalled += parseInt(tr.dataset.installed || '0');
+        });
+
+        document.getElementById('sumDelivered').innerText = totalDelivered;
+        document.getElementById('sumInstalled').innerText = totalInstalled;
         document.getElementById('sumPhysical').innerText = totalPhysical;
         document.getElementById('sumMissing').innerText = totalMissing;
-        // Delivered and Installed are set during generate and don't change
       }
     }
 
