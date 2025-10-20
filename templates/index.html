@@ -1327,6 +1327,18 @@ if (clearSearchBtn) {
 
       const hasFilters = q || typeVal || locVal || showMissing;
 
+      console.log('updateTotalsUI called, hasFilters:', hasFilters, 'typeVal:', typeVal, 'locVal:', locVal);
+
+      // Debug: check first row's dataset
+      const firstRow = document.querySelector('#stockTable tbody tr');
+      if (firstRow) {
+        console.log('First row dataset:', {
+          theoretical: firstRow.dataset.theoretical,
+          installed: firstRow.dataset.installed,
+          missing: firstRow.dataset.missing
+        });
+      }
+
       if (hasFilters) {
         // Calculate totals for filtered rows only
         let filteredDelivered = 0;
@@ -1353,6 +1365,7 @@ if (clearSearchBtn) {
           }
         });
 
+        console.log('Filtered totals:', {filteredDelivered, filteredInstalled, filteredPhysical, filteredMissing});
         document.getElementById('sumDelivered').innerText = filteredDelivered;
         document.getElementById('sumInstalled').innerText = filteredInstalled;
         document.getElementById('sumPhysical').innerText = filteredPhysical;
@@ -1367,6 +1380,7 @@ if (clearSearchBtn) {
           totalInstalled += parseInt(tr.dataset.installed || '0');
         });
 
+        console.log('All totals:', {totalDelivered, totalInstalled, totalPhysical, totalMissing});
         document.getElementById('sumDelivered').innerText = totalDelivered;
         document.getElementById('sumInstalled').innerText = totalInstalled;
         document.getElementById('sumPhysical').innerText = totalPhysical;
