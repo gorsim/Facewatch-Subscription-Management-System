@@ -599,6 +599,8 @@
     let installedName = null;
     let totalPhysical = 0;
     let totalMissing = 0;
+    let totalDelivered = 0;
+    let totalInstalled = 0;
 
       // Manage Locations navigation
       (function(){
@@ -1083,6 +1085,14 @@
       // Ensure default to All on initial render
       try { poFilter.value = ''; } catch(_) {}
 
+      // Calculate total delivered and installed from all data
+      totalDelivered = 0;
+      totalInstalled = 0;
+      data.theoretical_stock.forEach(r => {
+        totalDelivered += (r.theoretical_stock || 0);
+        totalInstalled += (r.installed || 0);
+      });
+
       // Progressive row rendering for mobile Safari performance (await completion)
       await new Promise((resolve) => {
         const rows = data.theoretical_stock || [];
@@ -1408,15 +1418,7 @@ if (clearSearchBtn) {
         document.getElementById('sumPhysical').innerText = filteredPhysical;
         document.getElementById('sumMissing').innerText = filteredMissing;
       } else {
-        // No filters - calculate totals from all rows
-        let totalDelivered = 0;
-        let totalInstalled = 0;
-
-        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
-          totalDelivered += parseInt(tr.dataset.theoretical || '0');
-          totalInstalled += parseInt(tr.dataset.installed || '0');
-        });
-
+        // No filters - use global totals (already calculated from all data)
         console.log('All totals:', {totalDelivered, totalInstalled, totalPhysical, totalMissing});
         document.getElementById('sumDelivered').innerText = totalDelivered;
         document.getElementById('sumInstalled').innerText = totalInstalled;
