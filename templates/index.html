@@ -1085,13 +1085,9 @@
       // Ensure default to All on initial render
       try { poFilter.value = ''; } catch(_) {}
 
-      // Calculate total delivered and installed from all data
-      totalDelivered = 0;
-      totalInstalled = 0;
-      data.theoretical_stock.forEach(r => {
-        totalDelivered += (r.theoretical_stock || 0);
-        totalInstalled += (r.installed || 0);
-      });
+      // Store total delivered and installed from server data
+      totalDelivered = data.summary.total_delivered || 0;
+      totalInstalled = data.summary.total_installed || 0;
 
       // Progressive row rendering for mobile Safari performance (await completion)
       await new Promise((resolve) => {
