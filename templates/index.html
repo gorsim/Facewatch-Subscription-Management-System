@@ -1251,7 +1251,7 @@
 
 
 
-    document.getElementById('showMissingOnly').addEventListener('change', () => { try { recalcTotals(); } catch(_) {}; applyMissingFilter(); page = 1; applyPagination(); });
+    document.getElementById('showMissingOnly').addEventListener('change', () => { try { recalcTotals(); } catch(_) {}; applyMissingFilter(); page = 1; applyPagination(); updateTotalsUI(); });
     // Guard: search button may not exist (we have live search)
     (function(){
       const searchBtnEl = document.getElementById('searchBtn');
@@ -1259,13 +1259,13 @@
         searchBtnEl.addEventListener('click', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
       }
     })();
-    document.getElementById('typeFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
-    document.getElementById('locationFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); });
+    document.getElementById('typeFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); });
+    document.getElementById('locationFilter').addEventListener('change', () => { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); });
 
 // Live search + clear button
 const searchInputEl = document.getElementById('searchInput');
 const clearSearchBtn = document.getElementById('clearSearch');
-function runSearchPipeline() { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); }
+function runSearchPipeline() { applySearch(); applyTypeFilter(); applyLocationFilter(); page = 1; applyPagination(); updateTotalsUI(); }
 if (searchInputEl) {
   searchInputEl.addEventListener('input', () => {
     runSearchPipeline();
@@ -1317,8 +1317,50 @@ if (clearSearchBtn) {
     }
 
     function updateTotalsUI() {
-      document.getElementById('sumPhysical').innerText = totalPhysical;
-      document.getElementById('sumMissing').innerText = totalMissing;
+      // Check if any filters are active
+      const q = (document.getElementById('searchInput')?.value || '').trim();
+      const typeVal = document.getElementById('typeFilter')?.value || '';
+      const locVal = document.getElementById('locationFilter')?.value || '';
+      const showMissing = document.getElementById('showMissingOnly')?.checked;
+
+      const hasFilters = q || typeVal || locVal || showMissing;
+
+      if (hasFilters) {
+        // Calculate totals for filtered rows only
+        let filteredDelivered = 0;
+        let filteredInstalled = 0;
+        let filteredPhysical = 0;
+        let filteredMissing = 0;
+
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
+          const matchType = (tr.dataset.typeMatch ?? '1') === '1';
+          const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
+          const matchMissing = !showMissing || (parseInt(tr.dataset.missing || '0') > 0);
+
+          if (matchSearch && matchType && matchLoc && matchMissing) {
+            const theoretical = parseInt(tr.dataset.theoretical || '0');
+            const installed = parseInt(tr.dataset.installed || '0');
+            const physical = tr.querySelector('.physical-checkbox')?.checked ? 1 : 0;
+            const missing = parseInt(tr.dataset.missing || '0');
+
+            filteredDelivered += theoretical;
+            filteredInstalled += installed;
+            filteredPhysical += physical;
+            filteredMissing += missing;
+          }
+        });
+
+        document.getElementById('sumDelivered').innerText = filteredDelivered;
+        document.getElementById('sumInstalled').innerText = filteredInstalled;
+        document.getElementById('sumPhysical').innerText = filteredPhysical;
+        document.getElementById('sumMissing').innerText = filteredMissing;
+      } else {
+        // No filters - use global totals
+        document.getElementById('sumPhysical').innerText = totalPhysical;
+        document.getElementById('sumMissing').innerText = totalMissing;
+        // Delivered and Installed are set during generate and don't change
+      }
     }
 
     function applyMissingFilter() {
