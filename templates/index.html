@@ -1181,8 +1181,6 @@
       // Update totals listener is added below; initial totals will be set after hydration
 
       // Only add event listener if not already added
-            clearTimeout(flushTimer);
-
       if (!tbody.dataset.listenerAdded) {
         tbody.dataset.listenerAdded = 'true';
         tbody.addEventListener('change', (e) => {
