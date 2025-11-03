@@ -18,6 +18,7 @@
     input[type=file] { width:100%; padding:10px; background:#0b1220; border:1px dashed #334155; border-radius:8px; color:#cbd5e1; }
     button { background:var(--accent); border:none; color:#052e2b; padding:10px 14px; border-radius:8px; font-weight:600; cursor:pointer; }
     button.secondary { background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
+    button.secondary.ready { background:var(--accent); color:#052e2b; border:1px solid var(--accent); }
     button.danger { background:var(--danger); color:white; }
     .actions { display:flex; gap:12px; margin-top:12px; align-items:center; flex-wrap: wrap; }
     .search { display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap: wrap; justify-content: flex-end; }
@@ -958,6 +959,7 @@
         deliveredName = data.delivered_file; installedName = data.installed_file;
         statusEl.textContent = 'Files uploaded. You can now Generate Stock List.';
         generateBtn.disabled = false;
+        generateBtn.classList.add('ready');
       } catch (e) { statusEl.textContent = 'Error: ' + e.message; console.error(e); }
     };
 
