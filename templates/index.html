@@ -63,6 +63,7 @@
       .card-item .controls input[type=text] { width:100%; }
     }
     #stockTable tbody.missing-only tr[data-missing="0"] { display: none; }
+    #stockTable tbody.ticked-only tr:not(:has(.physical-checkbox:checked)) { display: none; }
     .pagination-hidden { display: none !important; }
     /* Batch Import Modal */
     #batchImportModal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center; }
@@ -104,11 +105,6 @@
           Bring notes fwd:
           <select id="bringForwardDate"><option value="">—</option></select>
           <button id="bringForwardBtn" class="secondary" title="Copy Locations & Notes into blanks only">Apply</button>
-        </span>
-        <span class="chip">
-          <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
-            <input type="checkbox" id="showMissingOnly" /> Show Missing Only
-          </label>
         </span>
 
         <span class="chip" id="pageControls" style="display:none">
@@ -168,6 +164,14 @@
             <select id="poFilter">
               <option value="">All</option>
             </select>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="showMissingOnly" style="margin:0;" />
+            Show Missing Only
+          </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="showTickedOnly" style="margin:0;" />
+            Show Ticked Only
           </label>
         </div>
       </div>
@@ -1374,6 +1378,7 @@
 
 
     document.getElementById('showMissingOnly').addEventListener('change', () => { try { recalcTotals(); } catch(_) {}; applyMissingFilter(); page = 1; applyPagination(); updateTotalsUI(); });
+    document.getElementById('showTickedOnly').addEventListener('change', () => { try { recalcTotals(); } catch(_) {}; applyMissingFilter(); page = 1; applyPagination(); updateTotalsUI(); });
     // Guard: search button may not exist (we have live search)
     (function(){
       const searchBtnEl = document.getElementById('searchBtn');
@@ -1513,6 +1518,16 @@ if (clearSearchBtn) {
     }
 
     function applyMissingFilter() {
+      const showMissing = document.getElementById('showMissingOnly').checked;
+      const showTicked = document.getElementById('showTickedOnly').checked;
+      const tbody = document.querySelector('#stockTable tbody');
+      if (!tbody) return;
+      tbody.classList.toggle('missing-only', !!showMissing);
+      tbody.classList.toggle('ticked-only', !!showTicked);
+      page = 1;
+      applyPagination();
+    }
+
     // Auto-save for Notes/Locations changes
     document.addEventListener('input', (e) => {
       if (e.target.classList.contains('notes')) {
@@ -1530,13 +1545,6 @@ if (clearSearchBtn) {
         hasUnsavedChanges = true;
       }
     });
-      const showMissing = document.getElementById('showMissingOnly').checked;
-      const tbody = document.querySelector('#stockTable tbody');
-      if (!tbody) return;
-      tbody.classList.toggle('missing-only', !!showMissing);
-      page = 1;
-      applyPagination();
-    }
 
     // Persist/Load state
     async function hydrateFromSavedState() {
