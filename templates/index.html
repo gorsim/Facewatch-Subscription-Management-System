@@ -725,9 +725,11 @@
 
       async function _ensureGeneratedImpl() {
         const table = document.getElementById('stockTable');
+        const currentDate = getSelectedDate();
+
         // Always check for saved data first, regardless of table state
         try {
-          const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
+          const savedRes = await fetch('/load_physical_state?date=' + encodeURIComponent(currentDate));
           const saved = await savedRes.json();
 
           if (saved && saved.theoretical_stock && saved.theoretical_stock.length > 0) {
@@ -751,8 +753,19 @@
           console.log('No saved data for ' + getSelectedDate() + ', checking for fresh generation');
         }
 
-        // If no saved data, check if we need to generate fresh data
+        // If no saved theoretical_stock for this date, clear the table to avoid showing wrong date's data
         console.log('🔍 Checking table state. Has rows:', table && table.tBodies[0] && table.tBodies[0].children.length > 0);
+        if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
+          // Check if table is from a different date - if so, clear it
+          const tbody = table.tBodies[0];
+          const tableDate = tbody.dataset.loadedDate;
+          if (tableDate && tableDate !== currentDate) {
+            console.log('⚠️ Table is from different date (' + tableDate + '), clearing for ' + currentDate);
+            tbody.innerHTML = '';
+            tbody.dataset.loadedDate = '';
+          }
+        }
+
         if (table && table.tBodies[0] && table.tBodies[0].children.length > 0) {
           console.log('✓ Table has rows, hydrating and processing...');
           // Rows already present (e.g., from guaranteed flush). Finish full UI init here.
@@ -992,6 +1005,8 @@
       const table = document.getElementById('stockTable');
       const tbody = table.querySelector('tbody');
       tbody.innerHTML = '';
+      // Mark which date this table is showing
+      tbody.dataset.loadedDate = getSelectedDate();
       const totalIncoming = (data.theoretical_stock || []).length;
       try { statusEl && (statusEl.textContent = `Rendering ${totalIncoming} rows…`); } catch(_) {}
 
