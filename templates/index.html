@@ -528,7 +528,14 @@
           // Show success toast notification
           showToast('✓ Changes saved successfully', 'success');
 
-          refreshDateHistory();
+          // Refresh date history if function is available
+          try {
+            if (typeof refreshDateHistory === 'function') {
+              await refreshDateHistory();
+            }
+          } catch(e) {
+            console.warn('Could not refresh date history:', e);
+          }
           try { window.populateBringForwardDates && window.populateBringForwardDates(); } catch {}
           hasUnsavedChanges = false;
 
