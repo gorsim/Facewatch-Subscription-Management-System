@@ -25,6 +25,22 @@
     .search input { width:220px; padding:8px 10px; border-radius:8px; background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
     .search select { padding:8px 10px; border-radius:8px; background:#0b1220; color:#cbd5e1; border:1px solid #334155; }
     .search label { white-space: nowrap; }
+    .search label.filter-checkbox {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #0b1220;
+      border: 1px solid #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .search label.filter-checkbox:hover {
+      border-color: #475569;
+      background: #0f1729;
+    }
+    .search label.filter-checkbox input:checked + span {
+      color: var(--accent);
+      font-weight: 600;
+    }
     table { width:100%; border-collapse:collapse; margin-top:20px; }
     th, td { border-bottom:1px solid #1f2937; padding:10px; text-align:left; font-size:14px; }
     th { color:#a3b2c7; font-weight:600; position:sticky; top:0; background:var(--panel); z-index:5; cursor:pointer; box-shadow: 0 1px 0 var(--border); }
@@ -116,9 +132,6 @@
           View:
           <button id="viewTable" class="secondary active">Table</button>
           <button id="viewCards" class="secondary">Cards</button>
-          <label style="margin-left:8px; display:inline-flex; align-items:center; gap:6px;">
-            <input type="checkbox" id="cardsAllFiltered" /> All filtered
-          </label>
         </span>
         <span class="chip" style="margin-left:auto">
           <button id="supportBtn" class="secondary">Support</button>
@@ -165,13 +178,13 @@
               <option value="">All</option>
             </select>
           </label>
-          <label style="display:flex; align-items:center; gap:8px;">
+          <label class="filter-checkbox" style="display:flex; align-items:center; gap:8px;">
             <input type="checkbox" id="showMissingOnly" style="margin:0;" />
-            Show Missing Only
+            <span>Show Missing Only</span>
           </label>
-          <label style="display:flex; align-items:center; gap:8px;">
+          <label class="filter-checkbox" style="display:flex; align-items:center; gap:8px;">
             <input type="checkbox" id="showTickedOnly" style="margin:0;" />
-            Show Ticked Only
+            <span>Show Ticked Only</span>
           </label>
         </div>
       </div>
@@ -625,11 +638,10 @@
         const showMissing = document.getElementById('showMissingOnly')?.checked;
 
         const rows = Array.from(document.querySelectorAll('#stockTable tbody tr'));
-        const allFiltered = document.getElementById('cardsAllFiltered')?.checked;
         rows.forEach(tr => {
-          // Respect filters and optionally pagination
+          // Respect filters and pagination
           const hiddenByPage = tr.classList.contains('pagination-hidden');
-          if (!allFiltered && hiddenByPage) return;
+          if (hiddenByPage) return;
           // Do not rely on inline style; use flags and missing
           const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
           const matchType = (tr.dataset.typeMatch ?? '1') === '1';
@@ -1968,7 +1980,6 @@ if (clearSearchBtn) {
       }
       btnT?.addEventListener('click', ()=> setView('table'));
       btnC?.addEventListener('click', ()=> setView('cards'));
-      document.getElementById('cardsAllFiltered')?.addEventListener('change', ()=>{ if (btnC?.classList.contains('active')) renderCardsFromTable(); });
       setView('table');
     })();
 
