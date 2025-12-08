@@ -367,8 +367,8 @@
         }
         if (!el.value) el.value = todayStr();
         setLS('countDate', el.value);
-        // Clear cached data when date changes to force fresh load
-        theoreticalStockData = [];
+        // NOTE: Do NOT clear theoreticalStockData here - it will be loaded by ensureGenerated
+        // Clearing it causes data corruption when auto-save triggers before data is loaded
         installedName = null;
         deliveredName = null;
         hydrateFromSavedState();
@@ -502,13 +502,32 @@
     }
     async function saveStateNow() {
       try {
+        const payload = collectStatePayload();
+
+        // CRITICAL: Prevent saving if theoreticalStockData is empty, which would corrupt the file
+        // This can happen when switching dates before data is loaded
+        if (!payload.theoretical_stock || payload.theoretical_stock.length === 0) {
+          console.warn('⚠️ Skipping save - no theoretical_stock data loaded yet');
+          // Check if we have any physical counts to save
+          const hasPhysicalCounts = Object.keys(payload.physical_counts || {}).some(k => payload.physical_counts[k]);
+          if (hasPhysicalCounts) {
+            console.warn('⚠️ WARNING: Physical counts exist but no theoretical_stock - data may be lost!');
+          }
+          return;
+        }
+
         const res = await fetch('/save_physical_count', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(collectStatePayload())
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data && data.success) {
-          statusEl.textContent = `Auto-saved (${new Date().toLocaleTimeString()})`;
+          const timestamp = new Date().toLocaleTimeString();
+          statusEl.textContent = `✓ Saved (${timestamp})`;
+
+          // Show success toast notification
+          showToast('✓ Changes saved successfully', 'success');
+
           refreshDateHistory();
           try { window.populateBringForwardDates && window.populateBringForwardDates(); } catch {}
           hasUnsavedChanges = false;
@@ -516,8 +535,56 @@
 
 
         }
-      } catch(e) { /* ignore transient errors */ }
+      } catch(e) {
+        console.error('Save error:', e);
+        showToast('⚠ Failed to save changes', 'error');
+      }
     }
+
+    // Toast notification system
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        font-weight: 600;
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+      `;
+      document.body.appendChild(toast);
+
+      // Add slide-in animation
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(400px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(400px); opacity: 0; }
+        }
+      `;
+      if (!document.querySelector('style[data-toast-styles]')) {
+        style.setAttribute('data-toast-styles', 'true');
+        document.head.appendChild(style);
+      }
+
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
     function saveStateDebounced() {
       clearTimeout(saveTimer);
 
@@ -2049,8 +2116,8 @@ if (clearSearchBtn) {
         }
 
         // Step 3: Reload data from server
+        // NOTE: Do NOT clear theoreticalStockData here - ensureGenerated will load it
         statusEl.textContent = 'Refreshing...';
-        theoreticalStockData = [];
         await ensureGenerated();
 
         statusEl.textContent = '✓ Saved and refreshed for ' + currentDate;
