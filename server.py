@@ -288,7 +288,13 @@ def load_users():
 
 
 def save_users(users):
-    storage_write_json(USERS_FILE, {'users': users})
+    try:
+        print(f"[DEBUG] Saving {len(users)} users to {USERS_FILE}")
+        storage_write_json(USERS_FILE, {'users': users})
+        print(f"[DEBUG] Successfully saved users to {USERS_FILE}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save users: {e}")
+        raise
 
 
 def get_user(username):
@@ -346,45 +352,51 @@ def users_api():
             return render_template('users.html')
         return jsonify({'users': safe})
     # POST: replace full list; password fields are plain text and will be hashed
-    payload = request.get_json(force=True) or {}
-    incoming = payload.get('users')
-    if not isinstance(incoming, list):
-        return jsonify({'error': 'users must be a list'}), 400
-    new_list = []
-    seen = set()
-    for item in incoming:
-        if not isinstance(item, dict):
-            continue
-        username = (item.get('username') or '').strip()
-        if not username:
-            continue
-        key = username.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        role = (item.get('role') or 'user').lower()
-        role = 'admin' if role == 'admin' else 'user'
-        # Allow either password (plain) or password_hash (already hashed)
-        pwd_plain = item.get('password')
-        pwd_hash = item.get('password_hash')
-        if pwd_plain:
-            pwd_hash = generate_password_hash(pwd_plain, method='pbkdf2:sha256')
-        elif not pwd_hash:
-            # Keep existing hash if user exists
-            old = get_user(username)
-            if old:
-                pwd_hash = old.get('password_hash')
-        if not pwd_hash:
-            # Require a password for new users
-            return jsonify({'error': f'User {username} missing password'}), 400
-        # Password policy check for new/changed passwords
-        if pwd_plain:
-            ok, msg = validate_password(pwd_plain, username)
-            if not ok:
-                return jsonify({'error': f'User {username}: {msg}'}), 400
-        new_list.append({'username': username, 'password_hash': pwd_hash, 'role': role})
-    save_users(new_list)
-    return jsonify({'success': True})
+    try:
+        payload = request.get_json(force=True) or {}
+        incoming = payload.get('users')
+        if not isinstance(incoming, list):
+            return jsonify({'error': 'users must be a list'}), 400
+        new_list = []
+        seen = set()
+        for item in incoming:
+            if not isinstance(item, dict):
+                continue
+            username = (item.get('username') or '').strip()
+            if not username:
+                continue
+            key = username.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            role = (item.get('role') or 'user').lower()
+            role = 'admin' if role == 'admin' else 'user'
+            # Allow either password (plain) or password_hash (already hashed)
+            pwd_plain = item.get('password')
+            pwd_hash = item.get('password_hash')
+            if pwd_plain:
+                pwd_hash = generate_password_hash(pwd_plain, method='pbkdf2:sha256')
+            elif not pwd_hash:
+                # Keep existing hash if user exists
+                old = get_user(username)
+                if old:
+                    pwd_hash = old.get('password_hash')
+            if not pwd_hash:
+                # Require a password for new users
+                return jsonify({'error': f'User {username} missing password'}), 400
+            # Password policy check for new/changed passwords
+            if pwd_plain:
+                ok, msg = validate_password(pwd_plain, username)
+                if not ok:
+                    return jsonify({'error': f'User {username}: {msg}'}), 400
+            new_list.append({'username': username, 'password_hash': pwd_hash, 'role': role})
+        save_users(new_list)
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[ERROR] Failed to save users: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/support')
 def support_page():

@@ -80,48 +80,69 @@
     }
 
     async function save(users) {
-      setStatus('Saving...');
-      const res = await fetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ users }) });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to save users');
-      setStatus('Saved.');
+      try {
+        setStatus('Saving...');
+        const res = await fetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ users }) });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setStatus('Error: ' + (data.error || 'Failed to save users'));
+          alert('Error: ' + (data.error || 'Failed to save users'));
+          throw new Error(data.error || 'Failed to save users');
+        }
+        setStatus('Saved.');
+      } catch (err) {
+        console.error('Save error:', err);
+        setStatus('Error: ' + err.message);
+        alert('Error saving users: ' + err.message);
+        throw err;
+      }
     }
 
     document.getElementById('addBtn').addEventListener('click', async () => {
-      const name = (document.getElementById('uName').value||'').trim();
-      const pass = (document.getElementById('uPass').value||'');
-      const role = document.getElementById('uRole').value||'user';
-      if (!name || !pass) { alert('Username and password required'); return; }
-      const res = await fetch('/users'); const data = await res.json();
-      const users = data.users || [];
-      if (users.some(u => (u.username||'').toLowerCase() === name.toLowerCase())) { alert('User already exists'); return; }
-      users.push({ username: name, password: pass, role });
-      await save(users);
-      document.getElementById('uName').value = '';
-      document.getElementById('uPass').value = '';
-      load();
+      try {
+        const name = (document.getElementById('uName').value||'').trim();
+        const pass = (document.getElementById('uPass').value||'');
+        const role = document.getElementById('uRole').value||'user';
+        if (!name || !pass) { alert('Username and password required'); return; }
+        const res = await fetch('/users'); const data = await res.json();
+        const users = data.users || [];
+        if (users.some(u => (u.username||'').toLowerCase() === name.toLowerCase())) { alert('User already exists'); return; }
+        users.push({ username: name, password: pass, role });
+        await save(users);
+        document.getElementById('uName').value = '';
+        document.getElementById('uPass').value = '';
+        load();
+      } catch (err) {
+        console.error('Add user error:', err);
+        setStatus('Error: ' + err.message);
+      }
     });
 
     document.getElementById('tbody').addEventListener('click', async (e) => {
-      const tr = e.target.closest('tr');
-      if (!tr) return;
-      const username = tr.children[0].innerText;
-      const res = await fetch('/users'); const data = await res.json();
-      let users = data.users || [];
-      const idx = users.findIndex(u => (u.username||'').toLowerCase() === username.toLowerCase());
-      if (idx < 0) return;
+      try {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const username = tr.children[0].innerText;
+        const res = await fetch('/users'); const data = await res.json();
+        let users = data.users || [];
+        const idx = users.findIndex(u => (u.username||'').toLowerCase() === username.toLowerCase());
+        if (idx < 0) return;
 
-      if (e.target.classList.contains('remove')) {
-        if (!confirm('Remove user '+username+'?')) return;
-        users.splice(idx,1);
-        await save(users); load(); return;
+        if (e.target.classList.contains('remove')) {
+          if (!confirm('Remove user '+username+'?')) return;
+          users.splice(idx,1);
+          await save(users); load(); return;
+        }
+        if (e.target.classList.contains('reset')) {
+          const np = prompt('Enter new password for '+username+' (min 12 chars incl. upper, lower, number, special)');
+          if (!np) return; users[idx].password = np; await save(users); alert('Password reset'); return;
+        }
+        if (e.target.classList.contains('makeAdmin')) { users[idx].role = 'admin'; await save(users); load(); return; }
+        if (e.target.classList.contains('makeUser')) { users[idx].role = 'user'; await save(users); load(); return; }
+      } catch (err) {
+        console.error('User action error:', err);
+        setStatus('Error: ' + err.message);
       }
-      if (e.target.classList.contains('reset')) {
-        const np = prompt('Enter new password for '+username+' (min 12 chars incl. upper, lower, number, special)');
-        if (!np) return; users[idx].password = np; await save(users); alert('Password reset'); return;
-      }
-      if (e.target.classList.contains('makeAdmin')) { users[idx].role = 'admin'; await save(users); load(); return; }
-      if (e.target.classList.contains('makeUser')) { users[idx].role = 'user'; await save(users); load(); return; }
     });
 
     load();
