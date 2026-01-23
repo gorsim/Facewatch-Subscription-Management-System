@@ -110,8 +110,12 @@
             <option>500</option>
           </select>
         </span>
-        <span class="chip">Stock Count date:
-          <input id="countDate" type="date" />
+        <span class="chip">
+          <button id="setupNewStocktakeBtn" class="primary">SET UP NEW STOCKTAKE</button>
+        </span>
+        <span class="chip" id="currentStocktakeInfo" style="display:none;">
+          <strong id="currentStocktakeDate"></strong>
+          <span id="currentStocktakeDesc" class="muted" style="margin-left:8px;"></span>
         </span>
         <span class="chip" id="dateHistoryWrap">
           Past counts:
@@ -393,7 +397,15 @@
       // Populate past dates
       fetch('/list_count_dates').then(r=>r.json()).then(d=>{
         const sel = document.getElementById('dateHistory');
-        sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
+        const datesData = d.dates || {};
+        // Handle both old format (array) and new format (object)
+        const datesArray = Array.isArray(datesData) ? datesData : Object.keys(datesData).sort().reverse();
+        const options = datesArray.map(date => {
+          const desc = Array.isArray(datesData) ? '' : (datesData[date] || '');
+          const label = desc ? `${date} (${desc})` : date;
+          return `<option value="${date}">${label}</option>`;
+        }).join('');
+        sel.innerHTML = '<option value="">—</option>' + options;
         sel.addEventListener('change', () => {
           console.log('📅 Past Counts dropdown changed to:', sel.value);
           if (sel.value) {
@@ -459,13 +471,24 @@
         const sel = document.getElementById('dateHistory');
         if (!sel) return;
         const current = sel.value;
-        sel.innerHTML = '<option value="">—</option>' + (d.dates||[]).map(x=>`<option>${x}</option>`).join('');
+        const datesData = d.dates || {};
+        // Handle both old format (array) and new format (object)
+        const datesArray = Array.isArray(datesData) ? datesData : Object.keys(datesData).sort().reverse();
+        const options = datesArray.map(date => {
+          const desc = Array.isArray(datesData) ? '' : (datesData[date] || '');
+          const label = desc ? `${date} (${desc})` : date;
+          return `<option value="${date}">${label}</option>`;
+        }).join('');
+        sel.innerHTML = '<option value="">—</option>' + options;
         if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
         const dInput = document.getElementById('countDate');
         const chosen = dInput?.value;
         if (chosen && ![...sel.options].some(o => o.value === chosen)) {
           const opt = document.createElement('option');
-          opt.value = chosen; opt.textContent = chosen; sel.appendChild(opt);
+          const chosenDesc = Array.isArray(datesData) ? '' : (datesData[chosen] || '');
+          opt.value = chosen;
+          opt.textContent = chosenDesc ? `${chosen} (${chosenDesc})` : chosen;
+          sel.appendChild(opt);
         }
 
         if (chosen) sel.value = chosen;
@@ -509,6 +532,7 @@
 
       return {
         date: getSelectedDate(),
+        description: window.currentStocktakeDesc || '',
         physical_counts: counts,
         notes,
         locations_map,
@@ -714,11 +738,20 @@
             const resp = await fetch('/list_count_dates');
             const d = await resp.json();
             const cur = document.getElementById('countDate')?.value;
-            const dates = (d.dates||[]);
-            let options = dates.map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
+            const datesData = d.dates || {};
+            // Handle both old format (array) and new format (object)
+            const datesArray = Array.isArray(datesData) ? datesData : Object.keys(datesData).sort().reverse();
+            let options = datesArray.map(date => {
+              const desc = Array.isArray(datesData) ? '' : (datesData[date] || '');
+              const label = desc ? `${date} (${desc})` : date;
+              const disabled = date === cur ? ' disabled' : '';
+              return `<option value="${date}"${disabled}>${label}</option>`;
+            }).join('');
             // Ensure the currently viewed date appears (disabled) even if not saved yet
-            if (cur && !dates.includes(cur)) {
-              options += `\n<option disabled>${cur}</option>`;
+            if (cur && !datesArray.includes(cur)) {
+              const curDesc = Array.isArray(datesData) ? '' : (datesData[cur] || '');
+              const curLabel = curDesc ? `${cur} (${curDesc})` : cur;
+              options += `\n<option value="${cur}" disabled>${curLabel}</option>`;
             }
             sel.innerHTML = '<option value="">—</option>' + options;
           } catch(e) {
@@ -727,9 +760,14 @@
               const hist = document.getElementById('dateHistory');
               const cur = document.getElementById('countDate')?.value;
               if (hist && hist.options && hist.options.length) {
-                const items = Array.from(hist.options).map(o=>o.value).filter(Boolean);
-                let options = items.map(x=>`<option${x===cur?' disabled':''}>${x}</option>`).join('');
-                if (cur && !items.includes(cur)) options += `\n<option disabled>${cur}</option>`;
+                const items = Array.from(hist.options).map(o => ({value: o.value, text: o.textContent})).filter(x => x.value);
+                let options = items.map(x => {
+                  const disabled = x.value === cur ? ' disabled' : '';
+                  return `<option value="${x.value}"${disabled}>${x.text}</option>`;
+                }).join('');
+                if (cur && !items.some(x => x.value === cur)) {
+                  options += `\n<option value="${cur}" disabled>${cur}</option>`;
+                }
                 sel.innerHTML = '<option value="">—</option>' + options;
               }
             } catch {}
@@ -1727,6 +1765,106 @@ if (clearSearchBtn) {
       }).catch(()=>{});
     })();
 
+    // New Stocktake Setup Modal
+    (function(){
+      const btn = document.getElementById('setupNewStocktakeBtn');
+      const modal = document.getElementById('newStocktakeModal');
+      const cancelBtn = document.getElementById('newStocktakeCancel');
+      const createBtn = document.getElementById('newStocktakeCreate');
+      const dateInput = document.getElementById('newStocktakeDate');
+      const descInput = document.getElementById('newStocktakeDesc');
+
+      // Global variables to track current stocktake
+      window.currentStocktakeDate = null;
+      window.currentStocktakeDesc = null;
+
+      function showModal() {
+        if (modal) {
+          dateInput.value = todayStr();
+          descInput.value = '';
+          modal.style.display = 'flex';
+          dateInput.focus();
+        }
+      }
+
+      function hideModal() {
+        if (modal) modal.style.display = 'none';
+      }
+
+      function updateCurrentStocktakeDisplay(date, desc) {
+        window.currentStocktakeDate = date;
+        window.currentStocktakeDesc = desc || '';
+        const infoSpan = document.getElementById('currentStocktakeInfo');
+        const dateSpan = document.getElementById('currentStocktakeDate');
+        const descSpan = document.getElementById('currentStocktakeDesc');
+        if (date) {
+          dateSpan.textContent = date;
+          descSpan.textContent = desc ? `(${desc})` : '';
+          infoSpan.style.display = '';
+        } else {
+          infoSpan.style.display = 'none';
+        }
+      }
+
+      btn && btn.addEventListener('click', showModal);
+      cancelBtn && cancelBtn.addEventListener('click', hideModal);
+
+      createBtn && createBtn.addEventListener('click', async () => {
+        const date = dateInput.value;
+        const desc = descInput.value.trim();
+        if (!date) {
+          alert('Please select a date');
+          return;
+        }
+
+        // Update display
+        updateCurrentStocktakeDisplay(date, desc);
+
+        // Save the description with the physical state
+        try {
+          const payload = {
+            date: date,
+            description: desc,
+            physical_counts: {},
+            notes: {},
+            locations_map: {},
+            locations_list: [],
+            installed_map: {},
+            theoretical_stock: []
+          };
+          await fetch('/save_physical_count', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (e) {
+          console.error('Failed to save stocktake metadata:', e);
+        }
+
+        hideModal();
+
+        // Reload the page with the new date
+        window.location.href = `/?date=${encodeURIComponent(date)}`;
+      });
+
+      // Load current stocktake info on page load
+      (async function loadCurrentStocktake() {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const dateParam = urlParams.get('date');
+          if (dateParam) {
+            const resp = await fetch(`/load_physical_state?date=${encodeURIComponent(dateParam)}`);
+            const data = await resp.json();
+            if (data && !data.error) {
+              updateCurrentStocktakeDisplay(dateParam, data.description);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load stocktake info:', e);
+        }
+      })();
+    })();
+
     // Batch Import Scanner - wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', function(){
       try {
@@ -2221,6 +2359,26 @@ if (clearSearchBtn) {
       <div class="modal-actions">
         <button id="batchImportClose" class="secondary">Close</button>
         <button id="batchImportProcess">Process & Tick</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Stocktake Setup Modal -->
+  <div id="newStocktakeModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-content" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;">
+      <h2 style="margin: 0 0 12px; font-size: 20px;">📅 Set Up New Stocktake</h2>
+      <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Create a new stock count with a date and optional description.</p>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Stock Count Date:</label>
+        <input id="newStocktakeDate" type="date" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Description (optional):</label>
+        <input id="newStocktakeDesc" type="text" placeholder="e.g., Monthly count, New delivery check, etc." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
+        <button id="newStocktakeCancel" class="secondary">Cancel</button>
+        <button id="newStocktakeCreate" class="primary">Create Stocktake</button>
       </div>
     </div>
   </div>

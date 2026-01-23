@@ -152,47 +152,51 @@ def storage_download_to_local(name: str) -> str:
 # --- Dates index and caching to speed up /list_count_dates ---
 from time import time as _now
 DATES_INDEX_FILE = 'dates_index.json'
-_DATES_CACHE = {'ts': 0.0, 'value': []}
+_DATES_CACHE = {'ts': 0.0, 'value': {}}
 _DATES_CACHE_TTL = 30.0  # seconds
 
 def _get_dates_index_cached():
+    """Returns dict mapping date -> description"""
     try:
         if _DATES_CACHE['value'] and (_now() - _DATES_CACHE['ts'] < _DATES_CACHE_TTL):
-            return list(_DATES_CACHE['value'])
+            return dict(_DATES_CACHE['value'])
         data = storage_read_json(DATES_INDEX_FILE, default=None)
-        arr = []
+        dates_dict = {}
         if isinstance(data, dict):
-            arr = list(data.get('dates') or [])
+            # New format: {dates: {date: desc, ...}}
+            if 'dates' in data and isinstance(data['dates'], dict):
+                dates_dict = data['dates']
+            # Old format: {dates: [date1, date2, ...]} - convert to dict
+            elif 'dates' in data and isinstance(data['dates'], list):
+                dates_dict = {d: '' for d in data['dates'] if isinstance(d, str)}
         elif isinstance(data, list):
-            arr = list(data)
-        arr = sorted(set([d for d in arr if isinstance(d, str)]))
-        _DATES_CACHE['value'] = arr
+            # Very old format: [date1, date2, ...]
+            dates_dict = {d: '' for d in data if isinstance(d, str)}
+        _DATES_CACHE['value'] = dates_dict
         _DATES_CACHE['ts'] = _now()
-        return list(arr)
+        return dict(dates_dict)
     except Exception:
-        return []
+        return {}
 
-def _set_dates_index(dates_list):
+def _set_dates_index(dates_dict):
+    """Save dates index as dict mapping date -> description"""
     try:
-        arr = sorted(set([d for d in (dates_list or []) if isinstance(d, str)]))
-        storage_write_json(DATES_INDEX_FILE, {'dates': arr})
-        _DATES_CACHE['value'] = arr
+        storage_write_json(DATES_INDEX_FILE, {'dates': dates_dict})
+        _DATES_CACHE['value'] = dict(dates_dict)
         _DATES_CACHE['ts'] = _now()
-        return arr
     except Exception:
-        return dates_list or []
+        pass
 
-def _add_date_to_index(date_str):
+def _add_date_to_index(date_str, description=''):
+    """Add or update a date in the index with optional description"""
     try:
         if not isinstance(date_str, str):
             return
         if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date_str):
             return
-        arr = _get_dates_index_cached()
-        if date_str in arr:
-            return
-        arr.append(date_str)
-        _set_dates_index(arr)
+        dates_dict = _get_dates_index_cached()
+        dates_dict[date_str] = description or ''
+        _set_dates_index(dates_dict)
     except Exception:
         pass
 
@@ -200,10 +204,10 @@ def _remove_date_from_index(date_str):
     try:
         if not isinstance(date_str, str):
             return
-        arr = _get_dates_index_cached()
-        if date_str in arr:
-            arr.remove(date_str)
-            _set_dates_index(arr)
+        dates_dict = _get_dates_index_cached()
+        if date_str in dates_dict:
+            del dates_dict[date_str]
+            _set_dates_index(dates_dict)
     except Exception:
         pass
 
@@ -1077,6 +1081,7 @@ def save_physical_count():
         locations_list = data.get('locations_list', [])
         installed_map = data.get('installed_map', {})
         date = data.get('date')  # optional
+        description = data.get('description', '')  # optional description
         theoretical_stock = data.get('theoretical_stock', [])
         payload = {
             'physical_counts': counts,
@@ -1087,6 +1092,7 @@ def save_physical_count():
             'theoretical_stock': theoretical_stock,
             'saved_at': datetime.now().isoformat(),
             'date': date,
+            'description': description,
         }
         # Write a timestamped backup and a stable file for reloads
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1099,7 +1105,7 @@ def save_physical_count():
             # Update stable pointer to latest saved
             storage_write_json('physical_state.json', payload)
             try:
-                _add_date_to_index(date)
+                _add_date_to_index(date, description)
             except Exception:
                 pass
         else:
@@ -1112,30 +1118,36 @@ def save_physical_count():
 @app.route('/list_count_dates', methods=['GET'])
 def list_count_dates():
     try:
-        # Use cached index first
+        # Use cached index first (returns dict of date -> description)
         cached = _get_dates_index_cached()
         if cached:
             return jsonify({'dates': cached})
-        # Build minimal list without fetching each backup file
+        # Build dict by scanning files and loading descriptions
         files = storage_list('physical_state_')
-        dates = set()
+        dates_dict = {}
         for name in files:
             if name.startswith('physical_state_') and name.endswith('.json'):
                 mid = name[len('physical_state_'):-len('.json')]
                 if re.fullmatch(r'\d{4}-\d{2}-\d{2}', mid):
-                    dates.add(mid)
+                    # Try to load description from the file
+                    try:
+                        data = storage_read_json(name, default={})
+                        desc = data.get('description', '') if isinstance(data, dict) else ''
+                        dates_dict[mid] = desc
+                    except Exception:
+                        dates_dict[mid] = ''
         # Include stable file date if present
         try:
             j = storage_read_json('physical_state.json', default=None)
-            d = (j or {}).get('date') if isinstance(j, dict) else None
-            if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
-                dates.add(d)
+            if isinstance(j, dict):
+                d = j.get('date')
+                if isinstance(d, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', d):
+                    dates_dict[d] = j.get('description', '')
         except Exception:
             pass
         # Persist index for fast subsequent calls
-        dates_list = sorted(dates)
-        _set_dates_index(dates_list)
-        return jsonify({'dates': dates_list})
+        _set_dates_index(dates_dict)
+        return jsonify({'dates': dates_dict})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
