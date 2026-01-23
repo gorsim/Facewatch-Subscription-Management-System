@@ -113,14 +113,10 @@
         <span class="chip">
           <button id="setupNewStocktakeBtn" class="primary">SET UP NEW STOCKTAKE</button>
         </span>
-        <span class="chip" id="currentStocktakeInfo" style="display:none;">
-          <strong id="currentStocktakeDate"></strong>
-          <span id="currentStocktakeDesc" class="muted" style="margin-left:8px;"></span>
-        </span>
         <!-- Hidden date input for backward compatibility with existing JavaScript -->
         <input type="date" id="countDate" style="display:none;" />
         <span class="chip" id="dateHistoryWrap">
-          Past counts:
+          Select Displayed Count:
           <select id="dateHistory" style="min-width: 280px;"><option value="">—</option></select>
         </span>
         <span class="chip" id="bringForwardWrap">
@@ -143,7 +139,6 @@
           <button id="supportBtn" class="secondary">Support</button>
           <button id="accountBtn" class="secondary">Account</button>
           <button id="manageUsersBtn" class="secondary" style="display:none">Users</button>
-          <button id="pastCountsBtn" class="secondary">Past Counts</button>
           <button id="logoutBtn" class="secondary">Logout</button>
         </span>
       </div>
@@ -1795,7 +1790,6 @@ if (clearSearchBtn) {
       const u=document.getElementById('manageUsersBtn'); if(u){ u.addEventListener('click', ()=>{ window.location.href='/users/manage'; }); }
       const a=document.getElementById('accountBtn'); if(a){ a.addEventListener('click', ()=>{ window.location.href='/account'; }); }
       const s=document.getElementById('supportBtn'); if(s){ s.addEventListener('click', ()=>{ window.location.href='/support'; }); }
-      const p=document.getElementById('pastCountsBtn'); if(p){ p.addEventListener('click', ()=>{ window.location.href='/past_counts'; }); }
       // Hide Users button for non-admins by probing /users (server still protects)
       fetch('/users', {headers:{'Accept':'application/json'}}).then(r=>{
         if (r.status===200) { u && (u.style.display=''); }
@@ -1833,19 +1827,10 @@ if (clearSearchBtn) {
       }
 
       function updateCurrentStocktakeDisplay(date, desc) {
-        console.log('📊 Updating stocktake display:', {date, desc});
+        console.log('📊 Updating stocktake metadata:', {date, desc});
         window.currentStocktakeDate = date;
         window.currentStocktakeDesc = desc || '';
-        const infoSpan = document.getElementById('currentStocktakeInfo');
-        const dateSpan = document.getElementById('currentStocktakeDate');
-        const descSpan = document.getElementById('currentStocktakeDesc');
-        if (date) {
-          dateSpan.textContent = date;
-          descSpan.textContent = desc ? `(${desc})` : '';
-          infoSpan.style.display = '';
-        } else {
-          infoSpan.style.display = 'none';
-        }
+        // Note: UI display removed - stocktake info now shown via "Select Displayed Count" dropdown
       }
 
       if (btn) {
