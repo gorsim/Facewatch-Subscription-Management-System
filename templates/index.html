@@ -99,7 +99,7 @@
   <div class="container">
     <div class="card">
       <h1>Camera Stock Control</h1>
-      <p class="sub">Upload monthly CSVs and generate a clean theoretical stock list. Only SAFR-Camera with a non-blank feedname are considered installed.</p>
+      <p class="sub">Create a new stocktake, upload monthly CSVs, and perform physical counts. Only SAFR-Camera with a non-blank feedname are considered installed.</p>
       <div class="actions">
         <span class="chip">Page size:
           <select id="pageSize">
@@ -147,19 +147,31 @@
           <button id="logoutBtn" class="secondary">Logout</button>
         </span>
       </div>
-      <div class="grid" id="uploadSection" {% if user_role != 'admin' %}style="display:none"{% endif %}>
-        <div>
-          <label>INPUT Stock Delivered (CSV)</label>
-          <input id="delivered" type="file" accept=".csv" />
+
+      <!-- New Stocktake Setup Section (hidden by default, shown after creating stocktake) -->
+      <div id="stocktakeSetupSection" style="display:none; margin: 20px 0; padding: 20px; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px;">
+        <h3 style="margin: 0 0 16px; font-size: 18px; color: var(--accent);">📦 Step 1: Upload CSV Files & Generate Stock List</h3>
+        <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Upload your monthly CSV files and generate the theoretical stock list for this stocktake.</p>
+
+        <div class="grid" id="uploadSection" {% if user_role != 'admin' %}style="display:none"{% endif %}>
+          <div>
+            <label>INPUT Stock Delivered (CSV)</label>
+            <input id="delivered" type="file" accept=".csv" />
+          </div>
+          <div>
+            <label>INPUT Cameras Installed (CSV)</label>
+            <input id="installed" type="file" accept=".csv" />
+          </div>
         </div>
-        <div>
-          <label>INPUT Cameras Installed (CSV)</label>
-          <input id="installed" type="file" accept=".csv" />
+
+        <div class="actions" style="margin-top: 16px;">
+          <button id="uploadBtn" {% if user_role != 'admin' %}style="display:none"{% endif %}>Upload Files</button>
+          <button id="generateBtn" class="secondary" {% if user_role != 'admin' %}style="display:none"{% else %}disabled{% endif %}>GENERATE STOCK LIST</button>
+          <button id="hideSetupBtn" class="secondary" style="margin-left: auto;">Hide Setup Section</button>
         </div>
       </div>
+
       <div class="actions">
-        <button id="uploadBtn" {% if user_role != 'admin' %}style="display:none"{% endif %}>Upload Files</button>
-        <button id="generateBtn" class="secondary" {% if user_role != 'admin' %}style="display:none"{% else %}disabled{% endif %}>GENERATE STOCK LIST</button>
         <button id="batchImportBtn" class="secondary" title="Import multiple scanned barcodes">📋 Batch Import Scans</button>
         <div class="search">
           <span style="position:relative; display:inline-flex; align-items:center;">
@@ -1896,12 +1908,29 @@ if (clearSearchBtn) {
 
           hideModal();
 
+          // Show the setup section for new stocktakes
+          const setupSection = document.getElementById('stocktakeSetupSection');
+          if (setupSection) {
+            setupSection.style.display = 'block';
+            // Scroll to the setup section
+            setupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+
           // Reload the page with the new date
           console.log('🔄 Redirecting to:', `/?date=${encodeURIComponent(date)}`);
-          window.location.href = `/?date=${encodeURIComponent(date)}`;
+          window.location.href = `/?date=${encodeURIComponent(date)}&showSetup=1`;
         });
       } else {
         console.error('❌ Create button not found!');
+      }
+
+      // Hide setup section button
+      const hideSetupBtn = document.getElementById('hideSetupBtn');
+      if (hideSetupBtn) {
+        hideSetupBtn.addEventListener('click', () => {
+          const setupSection = document.getElementById('stocktakeSetupSection');
+          if (setupSection) setupSection.style.display = 'none';
+        });
       }
 
       // Load current stocktake info on page load
@@ -1909,11 +1938,25 @@ if (clearSearchBtn) {
         try {
           const urlParams = new URLSearchParams(window.location.search);
           const dateParam = urlParams.get('date');
+          const showSetup = urlParams.get('showSetup');
+
           if (dateParam) {
             const resp = await fetch(`/load_physical_state?date=${encodeURIComponent(dateParam)}`);
             const data = await resp.json();
             if (data && !data.error) {
               updateCurrentStocktakeDisplay(dateParam, data.description);
+            }
+          }
+
+          // Show setup section if requested (for new stocktakes)
+          if (showSetup === '1') {
+            const setupSection = document.getElementById('stocktakeSetupSection');
+            if (setupSection) {
+              setupSection.style.display = 'block';
+              // Scroll to it after a short delay to ensure page is loaded
+              setTimeout(() => {
+                setupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 300);
             }
           }
         } catch (e) {
