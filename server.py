@@ -1155,7 +1155,7 @@ if __name__ == '__main__':
     print("Starting Camera Stock Control server...")
     print("Open http://localhost:5001 in your browser")
     try:
-        app.run(debug=True, port=5000, host='localhost')
+        app.run(debug=True, port=5001, host='localhost')
     except Exception as e:
         print(f"Error starting server: {e}")
         print("Trying port 8000...")
