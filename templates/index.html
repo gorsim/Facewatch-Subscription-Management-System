@@ -117,6 +117,8 @@
           <strong id="currentStocktakeDate"></strong>
           <span id="currentStocktakeDesc" class="muted" style="margin-left:8px;"></span>
         </span>
+        <!-- Hidden date input for backward compatibility with existing JavaScript -->
+        <input type="date" id="countDate" style="display:none;" />
         <span class="chip" id="dateHistoryWrap">
           Past counts:
           <select id="dateHistory" style="min-width: 280px;"><option value="">—</option></select>
@@ -648,6 +650,25 @@
     </div>
   </div>
 
+  <!-- New Stocktake Setup Modal -->
+  <div id="newStocktakeModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-content" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;">
+      <h2 style="margin: 0 0 12px; font-size: 20px;">📅 Set Up New Stocktake</h2>
+      <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Create a new stock count with a date and optional description.</p>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Stock Count Date:</label>
+        <input id="newStocktakeDate" type="date" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Description (optional):</label>
+        <input id="newStocktakeDesc" type="text" placeholder="e.g., Monthly count, New delivery check, etc." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
+        <button id="newStocktakeCancel" class="secondary">Cancel</button>
+        <button id="newStocktakeCreate" class="primary">Create Stocktake</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     let deliveredName = null;
@@ -2395,26 +2416,6 @@ if (clearSearchBtn) {
       <div class="modal-actions">
         <button id="batchImportClose" class="secondary">Close</button>
         <button id="batchImportProcess">Process & Tick</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- New Stocktake Setup Modal -->
-  <div id="newStocktakeModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-content" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;">
-      <h2 style="margin: 0 0 12px; font-size: 20px;">📅 Set Up New Stocktake</h2>
-      <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Create a new stock count with a date and optional description.</p>
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Stock Count Date:</label>
-        <input id="newStocktakeDate" type="date" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
-      </div>
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Description (optional):</label>
-        <input id="newStocktakeDesc" type="text" placeholder="e.g., Monthly count, New delivery check, etc." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
-      </div>
-      <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
-        <button id="newStocktakeCancel" class="secondary">Cancel</button>
-        <button id="newStocktakeCreate" class="primary">Create Stocktake</button>
       </div>
     </div>
   </div>
