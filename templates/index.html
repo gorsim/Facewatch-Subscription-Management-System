@@ -396,16 +396,20 @@
       });
       // Populate past dates
       fetch('/list_count_dates').then(r=>r.json()).then(d=>{
+        console.log('📅 Received dates from server:', d);
         const sel = document.getElementById('dateHistory');
         const datesData = d.dates || {};
+        console.log('📊 Dates data:', datesData, 'Type:', typeof datesData, 'Is array:', Array.isArray(datesData));
         // Handle both old format (array) and new format (object)
         const datesArray = Array.isArray(datesData) ? datesData : Object.keys(datesData).sort().reverse();
+        console.log('📋 Dates array:', datesArray);
         const options = datesArray.map(date => {
           const desc = Array.isArray(datesData) ? '' : (datesData[date] || '');
           const label = desc ? `${date} (${desc})` : date;
           return `<option value="${date}">${label}</option>`;
         }).join('');
         sel.innerHTML = '<option value="">—</option>' + options;
+        console.log('✅ Past counts dropdown populated with', datesArray.length, 'dates');
         sel.addEventListener('change', () => {
           console.log('📅 Past Counts dropdown changed to:', sel.value);
           if (sel.value) {
@@ -1774,11 +1778,14 @@ if (clearSearchBtn) {
       const dateInput = document.getElementById('newStocktakeDate');
       const descInput = document.getElementById('newStocktakeDesc');
 
+      console.log('🔧 Stocktake modal setup:', {btn, modal, cancelBtn, createBtn, dateInput, descInput});
+
       // Global variables to track current stocktake
       window.currentStocktakeDate = null;
       window.currentStocktakeDesc = null;
 
       function showModal() {
+        console.log('📅 Opening stocktake modal');
         if (modal) {
           dateInput.value = todayStr();
           descInput.value = '';
@@ -1788,10 +1795,12 @@ if (clearSearchBtn) {
       }
 
       function hideModal() {
+        console.log('❌ Closing stocktake modal');
         if (modal) modal.style.display = 'none';
       }
 
       function updateCurrentStocktakeDisplay(date, desc) {
+        console.log('📊 Updating stocktake display:', {date, desc});
         window.currentStocktakeDate = date;
         window.currentStocktakeDesc = desc || '';
         const infoSpan = document.getElementById('currentStocktakeInfo');
@@ -1806,46 +1815,73 @@ if (clearSearchBtn) {
         }
       }
 
-      btn && btn.addEventListener('click', showModal);
-      cancelBtn && cancelBtn.addEventListener('click', hideModal);
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          console.log('🖱️ Setup button clicked');
+          e.preventDefault();
+          showModal();
+        });
+      } else {
+        console.error('❌ Setup button not found!');
+      }
 
-      createBtn && createBtn.addEventListener('click', async () => {
-        const date = dateInput.value;
-        const desc = descInput.value.trim();
-        if (!date) {
-          alert('Please select a date');
-          return;
-        }
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', hideModal);
+      }
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) hideModal();
+        });
+      }
 
-        // Update display
-        updateCurrentStocktakeDisplay(date, desc);
+      if (createBtn) {
+        createBtn.addEventListener('click', async () => {
+          console.log('✅ Create stocktake button clicked');
+          const date = dateInput.value;
+          const desc = descInput.value.trim();
+          console.log('📝 Stocktake data:', {date, desc});
 
-        // Save the description with the physical state
-        try {
-          const payload = {
-            date: date,
-            description: desc,
-            physical_counts: {},
-            notes: {},
-            locations_map: {},
-            locations_list: [],
-            installed_map: {},
-            theoretical_stock: []
-          };
-          await fetch('/save_physical_count', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } catch (e) {
-          console.error('Failed to save stocktake metadata:', e);
-        }
+          if (!date) {
+            alert('Please select a date');
+            return;
+          }
 
-        hideModal();
+          // Update display
+          updateCurrentStocktakeDisplay(date, desc);
 
-        // Reload the page with the new date
-        window.location.href = `/?date=${encodeURIComponent(date)}`;
-      });
+          // Save the description with the physical state
+          try {
+            const payload = {
+              date: date,
+              description: desc,
+              physical_counts: {},
+              notes: {},
+              locations_map: {},
+              locations_list: [],
+              installed_map: {},
+              theoretical_stock: []
+            };
+            console.log('💾 Saving stocktake metadata:', payload);
+            const response = await fetch('/save_physical_count', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            console.log('✅ Save response:', result);
+          } catch (e) {
+            console.error('❌ Failed to save stocktake metadata:', e);
+          }
+
+          hideModal();
+
+          // Reload the page with the new date
+          console.log('🔄 Redirecting to:', `/?date=${encodeURIComponent(date)}`);
+          window.location.href = `/?date=${encodeURIComponent(date)}`;
+        });
+      } else {
+        console.error('❌ Create button not found!');
+      }
 
       // Load current stocktake info on page load
       (async function loadCurrentStocktake() {

@@ -1118,10 +1118,12 @@ def save_physical_count():
 @app.route('/list_count_dates', methods=['GET'])
 def list_count_dates():
     try:
-        # Use cached index first (returns dict of date -> description)
+        # Check if we have a valid cached index with dates
         cached = _get_dates_index_cached()
-        if cached:
+        # Only use cache if it has actual dates (not empty dict)
+        if cached and len(cached) > 0:
             return jsonify({'dates': cached})
+
         # Build dict by scanning files and loading descriptions
         files = storage_list('physical_state_')
         dates_dict = {}
@@ -1146,7 +1148,8 @@ def list_count_dates():
         except Exception:
             pass
         # Persist index for fast subsequent calls
-        _set_dates_index(dates_dict)
+        if dates_dict:
+            _set_dates_index(dates_dict)
         return jsonify({'dates': dates_dict})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
