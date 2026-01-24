@@ -125,6 +125,12 @@
           <button id="bringForwardBtn" class="secondary" title="Copy Locations & Notes into blanks only">Apply</button>
         </span>
 
+        <span class="chip" id="copyCountWrap">
+          Copy stock count from previous date:
+          <select id="copyCountDate" style="min-width: 280px;"><option value="">—</option></select>
+          <button id="copyCountBtn" class="secondary" title="Copy physical counts from selected date">Copy Counts</button>
+        </span>
+
         <span class="chip" id="pageControls" style="display:none">
           <button id="prevPage">Prev</button>
           <span id="pageInfo" class="muted"></span>
@@ -593,6 +599,7 @@
             console.warn('Could not refresh date history:', e);
           }
           try { window.populateBringForwardDates && window.populateBringForwardDates(); } catch {}
+          try { window.populateCopyCountDates && window.populateCopyCountDates(); } catch {}
           hasUnsavedChanges = false;
 
 
@@ -858,6 +865,96 @@
           if (!val) { alert('Choose a past stock count date to bring forward from.'); return; }
           if (!confirm(`Bring forward Locations & Notes from ${val} into BLANK fields only?`)) return;
           bringForward(val);
+        });
+      })();
+
+      // Copy stock counts from previous date
+      (function(){
+        const sel = document.getElementById('copyCountDate');
+        const btn = document.getElementById('copyCountBtn');
+        async function populate() {
+          try {
+            const resp = await fetch('/list_count_dates');
+            const d = await resp.json();
+            const cur = document.getElementById('countDate')?.value;
+            const datesData = d.dates || {};
+            // Handle both old format (array) and new format (object)
+            const datesArray = Array.isArray(datesData) ? datesData : Object.keys(datesData).sort().reverse();
+            let options = datesArray.map(date => {
+              const desc = Array.isArray(datesData) ? '' : (datesData[date] || '');
+              const label = desc ? `${date} (${desc})` : date;
+              const disabled = date === cur ? ' disabled' : '';
+              return `<option value="${date}"${disabled}>${label}</option>`;
+            }).join('');
+            // Ensure the currently viewed date appears (disabled) even if not saved yet
+            if (cur && !datesArray.includes(cur)) {
+              const curDesc = Array.isArray(datesData) ? '' : (datesData[cur] || '');
+              const curLabel = curDesc ? `${cur} (${curDesc})` : cur;
+              options += `\n<option value="${cur}" disabled>${curLabel}</option>`;
+            }
+            sel.innerHTML = '<option value="">—</option>' + options;
+          } catch(e) {
+            // Fallback: mirror from Select Displayed Count dropdown if available
+            try {
+              const hist = document.getElementById('dateHistory');
+              const cur = document.getElementById('countDate')?.value;
+              if (hist && hist.options && hist.options.length) {
+                const items = Array.from(hist.options).map(o => ({value: o.value, text: o.textContent})).filter(x => x.value);
+                let options = items.map(x => {
+                  const disabled = x.value === cur ? ' disabled' : '';
+                  return `<option value="${x.value}"${disabled}>${x.text}</option>`;
+                }).join('');
+                if (cur && !items.some(x => x.value === cur)) {
+                  options += `\n<option value="${cur}" disabled>${cur}</option>`;
+                }
+                sel.innerHTML = '<option value="">—</option>' + options;
+              }
+            } catch {}
+          }
+        }
+        // Expose for other code (after save)
+        window.populateCopyCountDates = populate;
+        populate();
+
+        async function copyCounts(dateStr){
+          if (!dateStr) return;
+          try {
+            const res = await fetch('/load_physical_state?date=' + encodeURIComponent(dateStr));
+            const saved = await res.json();
+            const countsMap = saved.physical_counts || {};
+
+            let copiedCount = 0;
+            document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+              const code = (tr.children[0]?.innerText || '').trim();
+              if (!code) return;
+              const savedCount = countsMap[code];
+              if (savedCount !== undefined && savedCount !== null && savedCount !== '') {
+                // Find the physical count input
+                const physicalInput = tr.querySelector('input[type="number"].physical');
+                if (physicalInput) {
+                  physicalInput.value = savedCount;
+                  copiedCount++;
+                }
+              }
+            });
+
+            // Update UI and persist
+            try { hasUnsavedChanges = true; } catch {}
+            try { renderCardsFromTable(); } catch {}
+            try { saveStateDebounced(); } catch {}
+            const s = document.getElementById('status');
+            if (s) s.textContent = `Copied ${copiedCount} physical counts from ${dateStr}.`;
+            alert(`Copied ${copiedCount} physical counts from ${dateStr}.`);
+          } catch (e) {
+            alert('Failed to copy counts: ' + (e.message || e));
+          }
+        }
+
+        if (btn) btn.addEventListener('click', () => {
+          const val = sel.value;
+          if (!val) { alert('Choose a past stock count date to copy from.'); return; }
+          if (!confirm(`Copy all physical counts from ${val}? This will OVERWRITE existing counts.`)) return;
+          copyCounts(val);
         });
       })();
 
@@ -2148,6 +2245,7 @@ if (clearSearchBtn) {
               try {
                 refreshDateHistory();
                 window.populateBringForwardDates && window.populateBringForwardDates();
+                window.populateCopyCountDates && window.populateCopyCountDates();
               } catch(e) {
                 console.error('Failed to refresh date dropdowns:', e);
               }
@@ -2362,6 +2460,7 @@ if (clearSearchBtn) {
         try {
           await refreshDateHistory();
           window.populateBringForwardDates && window.populateBringForwardDates();
+          window.populateCopyCountDates && window.populateCopyCountDates();
         } catch(e) {
           console.error('Failed to refresh date dropdowns:', e);
         }
