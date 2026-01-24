@@ -2056,15 +2056,20 @@ if (clearSearchBtn) {
             }
           }
 
-          // Show setup section if requested (for new stocktakes)
+          // Show setup section ONLY if explicitly requested (for new stocktakes)
+          const setupSection = document.getElementById('stocktakeSetupSection');
           if (showSetup === '1') {
-            const setupSection = document.getElementById('stocktakeSetupSection');
             if (setupSection) {
               setupSection.style.display = 'block';
               // Scroll to it after a short delay to ensure page is loaded
               setTimeout(() => {
                 setupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }, 300);
+            }
+          } else {
+            // Explicitly hide if showSetup is not '1'
+            if (setupSection) {
+              setupSection.style.display = 'none';
             }
           }
         } catch (e) {
