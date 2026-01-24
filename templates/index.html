@@ -923,29 +923,48 @@
             const saved = await res.json();
             const countsMap = saved.physical_counts || {};
 
+            console.log('📋 Copy counts - loaded data:', {dateStr, countsMap, totalKeys: Object.keys(countsMap).length});
+
             let copiedCount = 0;
+            let skippedDisabled = 0;
             document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
               const code = (tr.children[0]?.innerText || '').trim();
               if (!code) return;
               const savedCount = countsMap[code];
-              if (savedCount !== undefined && savedCount !== null && savedCount !== '') {
-                // Find the physical count input
-                const physicalInput = tr.querySelector('input[type="number"].physical');
-                if (physicalInput) {
-                  physicalInput.value = savedCount;
-                  copiedCount++;
+              // Physical counts are stored as 1 (checked) or 0 (unchecked)
+              if (savedCount !== undefined && savedCount !== null) {
+                // Find the physical count checkbox
+                const physicalCheckbox = tr.querySelector('.physical-checkbox');
+                if (physicalCheckbox) {
+                  if (physicalCheckbox.disabled) {
+                    skippedDisabled++;
+                    return;
+                  }
+                  // Set checkbox based on saved value (1 = checked, 0 = unchecked)
+                  const shouldBeChecked = savedCount == 1 || savedCount === true;
+                  if (physicalCheckbox.checked !== shouldBeChecked) {
+                    physicalCheckbox.checked = shouldBeChecked;
+                    copiedCount++;
+                    // Trigger change event to update missing count
+                    physicalCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                  }
                 }
               }
             });
 
+            console.log('📊 Copy results:', {copiedCount, skippedDisabled, totalInMap: Object.keys(countsMap).length});
+
             // Update UI and persist
             try { hasUnsavedChanges = true; } catch {}
             try { renderCardsFromTable(); } catch {}
+            try { recalculateMissing(); } catch {}
             try { saveStateDebounced(); } catch {}
             const s = document.getElementById('status');
-            if (s) s.textContent = `Copied ${copiedCount} physical counts from ${dateStr}.`;
-            alert(`Copied ${copiedCount} physical counts from ${dateStr}.`);
+            const msg = `Copied ${copiedCount} physical counts from ${dateStr}.` + (skippedDisabled > 0 ? ` (${skippedDisabled} disabled items skipped)` : '');
+            if (s) s.textContent = msg;
+            alert(msg);
           } catch (e) {
+            console.error('❌ Copy counts error:', e);
             alert('Failed to copy counts: ' + (e.message || e));
           }
         }
