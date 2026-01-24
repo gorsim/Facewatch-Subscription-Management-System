@@ -149,12 +149,12 @@
         </span>
       </div>
 
-      <!-- New Stocktake Setup Section (hidden by default, shown after creating stocktake) -->
-      <div id="stocktakeSetupSection" style="display:none; margin: 20px 0; padding: 20px; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px;">
+      <!-- New Stocktake Setup Section (hidden by default, shown only for new stocktakes) -->
+      <div id="stocktakeSetupSection" style="display:none; margin: 20px 0; padding: 20px; background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; position: relative;">
         <h3 style="margin: 0 0 16px; font-size: 18px; color: var(--accent);">📦 Step 1: Upload CSV Files & Generate Stock List</h3>
         <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Upload your monthly CSV files and generate the theoretical stock list for this stocktake.</p>
 
-        <div class="grid" id="uploadSection" {% if user_role != 'admin' %}style="display:none"{% endif %}>
+        <div class="grid" id="uploadSection" {% if user_role != 'admin' %}style="display:none"{% endif %} style="margin: 0;">
           <div>
             <label>INPUT Stock Delivered (CSV)</label>
             <input id="delivered" type="file" accept=".csv" />
@@ -165,7 +165,7 @@
           </div>
         </div>
 
-        <div class="actions" style="margin-top: 16px;">
+        <div class="actions" style="margin: 16px 0 0 0;">
           <button id="uploadBtn" {% if user_role != 'admin' %}style="display:none"{% endif %}>Upload Files</button>
           <button id="generateBtn" class="secondary" {% if user_role != 'admin' %}style="display:none"{% else %}disabled{% endif %}>GENERATE STOCK LIST</button>
           <button id="hideSetupBtn" class="secondary" style="margin-left: auto;">Hide Setup Section</button>
@@ -2033,6 +2033,11 @@ if (clearSearchBtn) {
         hideSetupBtn.addEventListener('click', () => {
           const setupSection = document.getElementById('stocktakeSetupSection');
           if (setupSection) setupSection.style.display = 'none';
+
+          // Remove showSetup parameter from URL so it stays hidden on refresh
+          const url = new URL(window.location);
+          url.searchParams.delete('showSetup');
+          window.history.replaceState({}, '', url);
         });
       }
 
