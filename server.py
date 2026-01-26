@@ -1083,6 +1083,59 @@ def save_physical_count():
         date = data.get('date')  # optional
         description = data.get('description', '')  # optional description
         theoretical_stock = data.get('theoretical_stock', [])
+
+        # ========== DATA LOSS PREVENTION SAFEGUARDS ==========
+
+        # Safeguard 1: Prevent saving if theoretical_stock is empty
+        if not theoretical_stock or len(theoretical_stock) == 0:
+            return jsonify({
+                'error': 'Cannot save: theoretical_stock is empty. Please generate stock list first.',
+                'safeguard': 'empty_theoretical_stock'
+            }), 400
+
+        # Safeguard 2: Check if we're about to overwrite existing data with suspiciously empty counts
+        if date:
+            dated_name = f'physical_state_{date}.json'
+            existing_data = storage_read_json(dated_name, default=None)
+
+            if existing_data:
+                existing_counts = existing_data.get('physical_counts', {})
+                existing_checked = sum(1 for v in existing_counts.values() if v)
+                new_checked = sum(1 for v in counts.values() if v)
+
+                # If existing data has counts but new data has very few or none
+                if existing_checked > 50 and new_checked < 10:
+                    return jsonify({
+                        'error': f'Data loss prevention: Refusing to overwrite {existing_checked} existing counts with only {new_checked} counts. This appears to be accidental data loss.',
+                        'safeguard': 'count_mismatch',
+                        'existing_checked': existing_checked,
+                        'new_checked': new_checked
+                    }), 400
+
+                # If we're reducing counts by more than 90%, require confirmation
+                if existing_checked > 100 and new_checked < (existing_checked * 0.1):
+                    return jsonify({
+                        'error': f'Data loss prevention: Refusing to reduce counts from {existing_checked} to {new_checked} (>90% reduction). Please verify your data.',
+                        'safeguard': 'massive_reduction',
+                        'existing_checked': existing_checked,
+                        'new_checked': new_checked
+                    }), 400
+
+        # Safeguard 3: Warn if physical_counts seems suspiciously low compared to theoretical_stock
+        total_theoretical = len(theoretical_stock)
+        total_physical_checked = sum(1 for v in counts.values() if v)
+
+        # If we have a large theoretical stock but almost no physical counts, something is wrong
+        if total_theoretical > 100 and total_physical_checked < 10:
+            return jsonify({
+                'error': f'Data loss prevention: You have {total_theoretical} items in theoretical stock but only {total_physical_checked} physical counts. This seems incorrect.',
+                'safeguard': 'low_physical_counts',
+                'total_theoretical': total_theoretical,
+                'total_physical_checked': total_physical_checked
+            }), 400
+
+        # ========== END SAFEGUARDS ==========
+
         payload = {
             'physical_counts': counts,
             'notes': notes,

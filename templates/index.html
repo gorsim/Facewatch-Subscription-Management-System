@@ -573,20 +573,105 @@
         // CRITICAL: Prevent saving if theoreticalStockData is empty, which would corrupt the file
         // This can happen when switching dates before data is loaded
         if (!payload.theoretical_stock || payload.theoretical_stock.length === 0) {
-          console.warn('⚠️ Skipping save - no theoretical_stock data loaded yet');
-          // Check if we have any physical counts to save
-          const hasPhysicalCounts = Object.keys(payload.physical_counts || {}).some(k => payload.physical_counts[k]);
-          if (hasPhysicalCounts) {
-            console.warn('⚠️ WARNING: Physical counts exist but no theoretical_stock - data may be lost!');
-          }
+          console.error('❌ Cannot save - no theoretical_stock data loaded');
+          showToast('❌ Cannot save: Please generate stock list first', 'error');
+          statusEl.textContent = '❌ Error: No stock list generated';
           return;
         }
+
+        // ========== CLIENT-SIDE DATA LOSS PREVENTION ==========
+
+        // Count how many physical counts are checked
+        const totalPhysicalChecked = Object.values(payload.physical_counts || {}).filter(v => v).length;
+        const totalTheoreticalItems = payload.theoretical_stock.length;
+
+        // Safeguard 1: Warn if trying to save with very few physical counts
+        if (totalTheoreticalItems > 100 && totalPhysicalChecked < 10) {
+          const proceed = confirm(
+            `⚠️ DATA LOSS WARNING!\n\n` +
+            `You have ${totalTheoreticalItems} items in your stock list but only ${totalPhysicalChecked} physical counts checked.\n\n` +
+            `This could mean you're about to overwrite existing data with empty counts.\n\n` +
+            `Are you ABSOLUTELY SURE you want to save?\n\n` +
+            `Click CANCEL to abort save (recommended)\n` +
+            `Click OK only if you're certain this is correct`
+          );
+
+          if (!proceed) {
+            console.log('✓ Save cancelled by user - data loss prevented');
+            showToast('Save cancelled - data preserved', 'info');
+            statusEl.textContent = 'Save cancelled';
+            return;
+          }
+        }
+
+        // Safeguard 2: Check if we're about to overwrite existing data
+        try {
+          const currentDate = getSelectedDate();
+          const checkRes = await fetch('/load_physical_state?date=' + encodeURIComponent(currentDate));
+          const existingData = await checkRes.json();
+
+          if (existingData && existingData.physical_counts) {
+            const existingChecked = Object.values(existingData.physical_counts).filter(v => v).length;
+
+            // If we're reducing counts by more than 50%, warn the user
+            if (existingChecked > 50 && totalPhysicalChecked < (existingChecked * 0.5)) {
+              const proceed = confirm(
+                `⚠️ MAJOR DATA REDUCTION WARNING!\n\n` +
+                `Existing saved data: ${existingChecked} cameras counted\n` +
+                `New data to save: ${totalPhysicalChecked} cameras counted\n\n` +
+                `You're about to REDUCE the count by ${existingChecked - totalPhysicalChecked} cameras (${Math.round((1 - totalPhysicalChecked/existingChecked) * 100)}% reduction).\n\n` +
+                `This could be accidental data loss!\n\n` +
+                `Click CANCEL to abort (recommended)\n` +
+                `Click OK only if this reduction is intentional`
+              );
+
+              if (!proceed) {
+                console.log('✓ Save cancelled - prevented overwriting existing data');
+                showToast('Save cancelled - existing data preserved', 'info');
+                statusEl.textContent = 'Save cancelled';
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Could not check existing data:', e);
+          // Continue with save if we can't check existing data
+        }
+
+        // ========== END CLIENT-SIDE SAFEGUARDS ==========
 
         const res = await fetch('/save_physical_count', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify(payload)
         });
         const data = await res.json();
+
+        // Check for server-side safeguard errors
+        if (!res.ok || data.error) {
+          console.error('❌ Server rejected save:', data.error);
+
+          // Show detailed error message
+          let errorMsg = data.error || 'Save failed';
+          if (data.safeguard) {
+            errorMsg = `🛡️ DATA PROTECTION: ${errorMsg}`;
+          }
+
+          showToast(`❌ ${errorMsg}`, 'error');
+          statusEl.textContent = '❌ Save failed - data protected';
+
+          // Show alert for critical errors
+          if (data.safeguard) {
+            alert(
+              `🛡️ DATA LOSS PREVENTION\n\n` +
+              `${data.error}\n\n` +
+              `Your data has been protected from accidental loss.\n\n` +
+              `Please check your data and try again.`
+            );
+          }
+
+          return;
+        }
+
         if (data && data.success) {
           const timestamp = new Date().toLocaleTimeString();
           statusEl.textContent = `✓ Saved (${timestamp})`;
@@ -2483,6 +2568,24 @@ if (clearSearchBtn) {
     document.getElementById('saveRefreshBtn').addEventListener('click', async () => {
       try {
         const currentDate = getSelectedDate();
+
+        // Show confirmation with count summary
+        const checkedCount = document.querySelectorAll('.physical-checkbox:checked').length;
+        const totalCount = document.querySelectorAll('.physical-checkbox').length;
+        const notesCount = Array.from(document.querySelectorAll('.notes')).filter(n => n.value.trim()).length;
+
+        const confirmMsg =
+          `📊 SAVE CONFIRMATION\n\n` +
+          `Date: ${currentDate}\n` +
+          `Physical counts checked: ${checkedCount} / ${totalCount}\n` +
+          `Notes added: ${notesCount}\n\n` +
+          `Click OK to save this data\n` +
+          `Click Cancel to abort`;
+
+        if (!confirm(confirmMsg)) {
+          statusEl.textContent = 'Save cancelled';
+          return;
+        }
 
         // Step 1: Save
         statusEl.textContent = 'Saving...';
