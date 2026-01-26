@@ -756,9 +756,7 @@ def upload_count_csv():
             'saved_at': datetime.now().isoformat(),
             'date': date,
         }
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_name = f'physical_state_{ts}.json'
-        storage_write_json(backup_name, payload)
+        # Save to dated file and stable pointer (S3 versioning handles backups)
         storage_write_json(f'physical_state_{date}.json', payload)
         storage_write_json('physical_state.json', payload)
 
@@ -1154,11 +1152,7 @@ def save_physical_count():
             'date': date,
             'description': description,
         }
-        # Write a timestamped backup and a stable file for reloads
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_name = f'physical_state_{ts}.json'
-        storage_write_json(backup_name, payload)
-        # If a date is provided, also write a dated file
+        # Save to dated file and stable pointer (S3 versioning handles backups)
         if date:
             dated_name = f'physical_state_{date}.json'
             storage_write_json(dated_name, payload)
@@ -1171,7 +1165,7 @@ def save_physical_count():
         else:
             # No date provided: keep stable behavior
             storage_write_json('physical_state.json', payload)
-        return jsonify({'success': True, 'filename': backup_name})
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -221,9 +221,6 @@
         <div class="box"><div class="muted">Total Installed</div><div id="sumInstalled" style="font-weight:700"></div></div>
         <div class="box"><div class="muted">Total Physical Count</div><div id="sumPhysical" style="font-weight:700"></div></div>
         <div class="box"><div class="muted">Total Missing</div><div id="sumMissing" style="font-weight:700"></div></div>
-        <div class="box" style="display:flex; align-items:center;">
-          <button id="saveRefreshBtn" class="primary" style="font-size:14px; padding:8px 16px;">💾 Save and Refresh</button>
-        </div>
       </div>
 
       <div class="table-wrap">
@@ -2664,55 +2661,7 @@ if (clearSearchBtn) {
       }
     });
 
-    // Save and Refresh button: save current state then reload data
-    document.getElementById('saveRefreshBtn').addEventListener('click', async () => {
-      try {
-        const currentDate = getSelectedDate();
 
-        // Show confirmation with count summary
-        const checkedCount = document.querySelectorAll('.physical-checkbox:checked').length;
-        const totalCount = document.querySelectorAll('.physical-checkbox').length;
-        const notesCount = Array.from(document.querySelectorAll('.notes')).filter(n => n.value.trim()).length;
-
-        const confirmMsg =
-          `📊 SAVE CONFIRMATION\n\n` +
-          `Date: ${currentDate}\n` +
-          `Physical counts checked: ${checkedCount} / ${totalCount}\n` +
-          `Notes added: ${notesCount}\n\n` +
-          `Click OK to save this data\n` +
-          `Click Cancel to abort`;
-
-        if (!confirm(confirmMsg)) {
-          statusEl.textContent = 'Save cancelled';
-          return;
-        }
-
-        // Step 1: Save
-        statusEl.textContent = 'Saving...';
-        await saveStateNow();
-        hasUnsavedChanges = false;
-
-        // Step 2: Refresh the Past Counts dropdown
-        try {
-          await refreshDateHistory();
-          window.populateBringForwardDates && window.populateBringForwardDates();
-          window.populateCopyCountDates && window.populateCopyCountDates();
-        } catch(e) {
-          console.error('Failed to refresh date dropdowns:', e);
-        }
-
-        // Step 3: Reload data from server
-        // NOTE: Do NOT clear theoreticalStockData here - ensureGenerated will load it
-        statusEl.textContent = 'Refreshing...';
-        await ensureGenerated();
-
-        statusEl.textContent = '✓ Saved and refreshed for ' + currentDate;
-      } catch (err) {
-        console.error('Failed to save and refresh:', err);
-        statusEl.textContent = '⚠ Failed to save and refresh';
-        alert('Failed to save and refresh. Please try again.');
-      }
-    });
 
 
 
