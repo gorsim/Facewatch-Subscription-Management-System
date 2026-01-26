@@ -2446,6 +2446,7 @@ if (clearSearchBtn) {
       const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
       const typeVal = document.getElementById('typeFilter').value || '';
       const locVal = document.getElementById('locationFilter').value || '';
+      const poVal = document.getElementById('poFilter').value || '';
       const showMissing = document.getElementById('showMissingOnly').checked;
       const rows = document.querySelectorAll('#stockTable tbody tr');
       rows.forEach(r => {
@@ -2453,10 +2454,12 @@ if (clearSearchBtn) {
         const code = (r.children[0].innerText || '').toLowerCase();
         const type = (r.children[1].innerText || '').trim();
         const loc = (r.querySelector('select.location')?.value || '').trim();
+        const po = (r.children[2].innerText || '').trim();
         let ok = true;
         if (q) ok = ok && code.includes(q);
         if (typeVal) ok = ok && type === typeVal;
         if (locVal) ok = ok && loc === locVal;
+        if (poVal) ok = ok && po === poVal;
         if (showMissing) ok = ok && (parseInt(r.dataset.missing || '0') > 0);
         if (!ok) return;
         const cb = r.querySelector('.physical-checkbox');
