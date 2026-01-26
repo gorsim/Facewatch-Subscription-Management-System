@@ -1087,11 +1087,18 @@ def save_physical_count():
         # ========== DATA LOSS PREVENTION SAFEGUARDS ==========
 
         # Safeguard 1: Prevent saving if theoretical_stock is empty
+        # EXCEPTION: Allow empty theoretical_stock if physical_counts is also empty (new stocktake setup)
+        is_new_stocktake = (not theoretical_stock or len(theoretical_stock) == 0) and \
+                          (not counts or sum(1 for v in counts.values() if v) == 0)
+
         if not theoretical_stock or len(theoretical_stock) == 0:
-            return jsonify({
-                'error': 'Cannot save: theoretical_stock is empty. Please generate stock list first.',
-                'safeguard': 'empty_theoretical_stock'
-            }), 400
+            if not is_new_stocktake:
+                return jsonify({
+                    'error': 'Cannot save: theoretical_stock is empty. Please generate stock list first.',
+                    'safeguard': 'empty_theoretical_stock'
+                }), 400
+            # Allow new stocktake creation with empty data
+            print(f'✓ Allowing new stocktake creation for date: {date}')
 
         # Safeguard 2: Check if we're about to overwrite existing data with suspiciously empty counts
         if date:

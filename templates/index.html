@@ -1841,6 +1841,13 @@ if (clearSearchBtn) {
         const res = await fetch('/load_physical_state?date=' + encodeURIComponent(getSelectedDate()));
         let data = await res.json();
         if (data && data.error) data = {};
+
+        // Load description from saved data
+        if (data.description) {
+          window.currentStocktakeDesc = data.description;
+          console.log('📝 Loaded description:', data.description);
+        }
+
         // load locations list first
         setLocationsList(data.locations_list || []);
         // First, merge global locations so row selects see the full list
@@ -2086,16 +2093,26 @@ if (clearSearchBtn) {
               installed_map: {},
               theoretical_stock: []
             };
-            console.log('💾 Saving stocktake metadata:', payload);
+            console.log('💾 Saving stocktake metadata (new stocktake):', payload);
             const response = await fetch('/save_physical_count', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
+
+            if (!response.ok) {
+              const error = await response.json();
+              console.error('❌ Failed to save stocktake metadata:', error);
+              alert(`Failed to create stocktake: ${error.error || 'Unknown error'}`);
+              return;
+            }
+
             const result = await response.json();
             console.log('✅ Save response:', result);
           } catch (e) {
             console.error('❌ Failed to save stocktake metadata:', e);
+            alert(`Failed to create stocktake: ${e.message}`);
+            return;
           }
 
           hideModal();
