@@ -276,6 +276,10 @@
           <button id="tickByLocation">Tick</button>
           <button id="untickByLocation">Untick</button>
         </span>
+        <span class="chip">Set location for filtered:
+          <select id="bulkSetLocation"><option value="">—</option></select>
+          <button id="setLocationFiltered">Apply</button>
+        </span>
         <span class="chip">
           <button id="batchImportBtn" class="secondary" title="Import multiple scanned barcodes">📋 Batch Import Scans</button>
         </span>
@@ -1385,6 +1389,7 @@
       setTimeout(async () => {
         const locationFilter = document.getElementById('locationFilter');
         const bulkLocation = document.getElementById('bulkLocation');
+        const bulkSetLocation = document.getElementById('bulkSetLocation');
         const values = new Set();
 
         // Global locations (persist across dates)
@@ -1414,6 +1419,9 @@
           }
           if (![...bulkLocation.options].some(o => o.value === v)) {
             const o2 = document.createElement('option'); o2.value = v; o2.textContent = v; bulkLocation.appendChild(o2);
+          }
+          if (![...bulkSetLocation.options].some(o => o.value === v)) {
+            const o3 = document.createElement('option'); o3.value = v; o3.textContent = v; bulkSetLocation.appendChild(o3);
           }
         });
         // Also refresh all row selects with the complete list
@@ -2504,6 +2512,74 @@ if (clearSearchBtn) {
       if (confirm('Untick ALL rows that match current filters across ALL pages?')) {
         setAllFilteredTicks(false);
       }
+    });
+
+    // Bulk set location for all filtered items
+    document.getElementById('setLocationFiltered').addEventListener('click', () => {
+      const locationToSet = document.getElementById('bulkSetLocation').value;
+      if (!locationToSet) {
+        alert('Please select a location first');
+        return;
+      }
+
+      // Count how many items will be affected
+      const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+      const typeVal = document.getElementById('typeFilter').value || '';
+      const locVal = document.getElementById('locationFilter').value || '';
+      const poVal = document.getElementById('poFilter').value || '';
+      const showMissing = document.getElementById('showMissingOnly').checked;
+      const rows = document.querySelectorAll('#stockTable tbody tr');
+
+      let matchCount = 0;
+      rows.forEach(r => {
+        const code = (r.children[0].innerText || '').toLowerCase();
+        const type = (r.children[1].innerText || '').trim();
+        const loc = (r.querySelector('select.location')?.value || '').trim();
+        const po = (r.children[2].innerText || '').trim();
+        let ok = true;
+        if (q) ok = ok && code.includes(q);
+        if (typeVal) ok = ok && type === typeVal;
+        if (locVal) ok = ok && loc === locVal;
+        if (poVal) ok = ok && po === poVal;
+        if (showMissing) ok = ok && (parseInt(r.dataset.missing || '0') > 0);
+        if (ok) matchCount++;
+      });
+
+      if (matchCount === 0) {
+        alert('No items match the current filters');
+        return;
+      }
+
+      if (!confirm(`Set location to "${locationToSet}" for ${matchCount} filtered item(s)?`)) {
+        return;
+      }
+
+      // Apply location to all filtered items
+      let updated = 0;
+      rows.forEach(r => {
+        const code = (r.children[0].innerText || '').toLowerCase();
+        const type = (r.children[1].innerText || '').trim();
+        const loc = (r.querySelector('select.location')?.value || '').trim();
+        const po = (r.children[2].innerText || '').trim();
+        let ok = true;
+        if (q) ok = ok && code.includes(q);
+        if (typeVal) ok = ok && type === typeVal;
+        if (locVal) ok = ok && loc === locVal;
+        if (poVal) ok = ok && po === poVal;
+        if (showMissing) ok = ok && (parseInt(r.dataset.missing || '0') > 0);
+
+        if (ok) {
+          const sel = r.querySelector('select.location');
+          if (sel) {
+            sel.value = locationToSet;
+            updated++;
+            hasUnsavedChanges = true;
+          }
+        }
+      });
+
+      showToast(`✓ Set location "${locationToSet}" for ${updated} item(s)`, 'success');
+      console.log(`✓ Bulk location update: ${updated} items set to "${locationToSet}"`);
     });
 
     // Export PDF: build a printable Missing-only checklist
