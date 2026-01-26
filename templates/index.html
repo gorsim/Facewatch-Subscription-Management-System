@@ -114,20 +114,24 @@
             <option>500</option>
           </select>
         </span>
+        {% if user_role == 'admin' %}
         <span class="chip">
           <button id="setupNewStocktakeBtn" class="primary">SET UP NEW STOCKTAKE</button>
         </span>
+        {% endif %}
         <!-- Hidden date input for backward compatibility with existing JavaScript -->
         <input type="date" id="countDate" style="display:none;" />
         <span class="chip" id="dateHistoryWrap">
           Select Displayed Count:
           <select id="dateHistory" style="min-width: 280px;"><option value="">—</option></select>
         </span>
+        {% if user_role == 'admin' %}
         <span class="chip" id="bringForwardWrap">
           Bring notes/locations forward:
           <select id="bringForwardDate" style="min-width: 280px;"><option value="">—</option></select>
           <button id="bringForwardBtn" class="secondary" title="Copy Locations & Notes into blanks only">Apply</button>
         </span>
+        {% endif %}
 
         <span class="chip" id="copyCountWrap">
           Copy stock count from previous date:
