@@ -2096,8 +2096,56 @@ if (clearSearchBtn) {
           // Update display
           updateCurrentStocktakeDisplay(date, desc);
 
-          // Save the description with the physical state
+          hideModal();
+
+          // Show loading message
+          const statusEl = document.getElementById('status');
+          if (statusEl) statusEl.textContent = 'Creating stocktake and generating stock list...';
+
           try {
+            // Step 1: Get the last uploaded file names
+            console.log('📂 Fetching last uploaded file names...');
+            const lastUploadRes = await fetch('/load_physical_state');
+            const lastUploadData = await lastUploadRes.json();
+            const deliveredFile = lastUploadData.last_delivered_file;
+            const installedFile = lastUploadData.last_installed_file;
+
+            if (!deliveredFile || !installedFile) {
+              alert('No CSV files have been uploaded yet. Please upload the delivered and installed CSV files first.');
+              if (statusEl) statusEl.textContent = 'Error: No CSV files found';
+              return;
+            }
+
+            console.log('✅ Found last uploaded files:', {deliveredFile, installedFile});
+
+            // Step 2: Generate the stock list using the last uploaded files
+            console.log('🔧 Generating stock list...');
+            const generateRes = await fetch('/generate_stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                delivered_file: deliveredFile,
+                installed_file: installedFile
+              })
+            });
+
+            if (!generateRes.ok) {
+              const error = await generateRes.json();
+              console.error('❌ Failed to generate stock list:', error);
+              alert(`Failed to generate stock list: ${error.error || 'Unknown error'}`);
+              if (statusEl) statusEl.textContent = 'Error: Failed to generate stock list';
+              return;
+            }
+
+            const stockData = await generateRes.json();
+            console.log('✅ Stock list generated:', stockData);
+
+            // Step 3: Save the stocktake with the generated theoretical_stock
+            const installedMap = {};
+            (stockData.theoretical_stock || []).forEach(row => {
+              installedMap[row.camera_code] = row.installed || 0;
+            });
+
             const payload = {
               date: date,
               description: desc,
@@ -2105,44 +2153,37 @@ if (clearSearchBtn) {
               notes: {},
               locations_map: {},
               locations_list: [],
-              installed_map: {},
-              theoretical_stock: []
+              installed_map: installedMap,
+              theoretical_stock: stockData.theoretical_stock || []
             };
-            console.log('💾 Saving stocktake metadata (new stocktake):', payload);
-            const response = await fetch('/save_physical_count', {
+
+            console.log('💾 Saving stocktake with generated stock list:', payload);
+            const saveRes = await fetch('/save_physical_count', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-              const error = await response.json();
-              console.error('❌ Failed to save stocktake metadata:', error);
-              alert(`Failed to create stocktake: ${error.error || 'Unknown error'}`);
+            if (!saveRes.ok) {
+              const error = await saveRes.json();
+              console.error('❌ Failed to save stocktake:', error);
+              alert(`Failed to save stocktake: ${error.error || 'Unknown error'}`);
+              if (statusEl) statusEl.textContent = 'Error: Failed to save stocktake';
               return;
             }
 
-            const result = await response.json();
-            console.log('✅ Save response:', result);
+            const result = await saveRes.json();
+            console.log('✅ Stocktake saved successfully:', result);
+
+            // Step 4: Reload the page with the new date
+            console.log('🔄 Redirecting to:', `/?date=${encodeURIComponent(date)}`);
+            window.location.href = `/?date=${encodeURIComponent(date)}`;
+
           } catch (e) {
-            console.error('❌ Failed to save stocktake metadata:', e);
+            console.error('❌ Failed to create stocktake:', e);
             alert(`Failed to create stocktake: ${e.message}`);
-            return;
+            if (statusEl) statusEl.textContent = 'Error: ' + e.message;
           }
-
-          hideModal();
-
-          // Show the setup section for new stocktakes
-          const setupSection = document.getElementById('stocktakeSetupSection');
-          if (setupSection) {
-            setupSection.style.display = 'block';
-            // Scroll to the setup section
-            setupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-
-          // Reload the page with the new date
-          console.log('🔄 Redirecting to:', `/?date=${encodeURIComponent(date)}`);
-          window.location.href = `/?date=${encodeURIComponent(date)}&showSetup=1`;
         });
       } else {
         console.error('❌ Create button not found!');
