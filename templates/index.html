@@ -1799,7 +1799,7 @@ if (clearSearchBtn) {
             const physical = parseInt(tr.dataset.physicalCount || '0');  // Use stored physical count
             const missing = parseInt(tr.dataset.missing || '0');
 
-            filteredTheoreticalStock += theoretical;
+            filteredTheoreticalStock += Math.max(0, theoretical);  // Clamp negative theoretical stock
             filteredInstalled += installed;
             filteredPhysical += physical;
             filteredMissing += missing;
@@ -1820,7 +1820,7 @@ if (clearSearchBtn) {
         document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
           const theoretical = parseInt(tr.dataset.theoretical || '0');
           const installed = parseInt(tr.dataset.installed || '0');
-          allTheoreticalStock += theoretical;
+          allTheoreticalStock += Math.max(0, theoretical);  // Clamp negative theoretical stock
           allInstalled += installed;
         });
 
