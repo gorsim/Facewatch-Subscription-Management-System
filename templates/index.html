@@ -223,6 +223,11 @@
         <div class="box"><div class="muted">Total Missing</div><div id="sumMissing" style="font-weight:700"></div></div>
       </div>
 
+      <!-- Data Validation Warning -->
+      <div id="dataValidationWarning" style="display:none; background:#ff4444; color:white; padding:15px; margin:10px 0; border-radius:5px; font-weight:bold; font-size:16px;">
+        ⚠️ DATA INTEGRITY ERROR: Totals do not cross-cast! <span id="dataErrorDetails"></span>
+      </div>
+
       <div class="table-wrap">
         <div id="cardList"></div>
         <table id="stockTable" style="display:none">
@@ -1586,8 +1591,8 @@
         const theoretical = parseInt(tr.dataset.theoretical || '0');
         const wasMissing = parseInt(tr.querySelector('.missing').innerText) || 0;
         const wasPhysical = parseInt(tr.dataset.physicalCount || '0');
-        const physical = e.target.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
-        const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
+        const physical = e.target.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
         tr.dataset.physicalCount = String(physical);
@@ -1746,13 +1751,13 @@ if (clearSearchBtn) {
       totalMissing = 0;
       document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
         const theoretical = parseInt(tr.dataset.theoretical || '0');
-        const physical = tr.querySelector('.physical-checkbox').checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
-        const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
+        const physical = tr.querySelector('.physical-checkbox').checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
         tr.dataset.physicalCount = String(physical);
-        totalPhysical += Math.max(0, physical);  // Clamp to 0
-        totalMissing += Math.max(0, missing);  // Clamp to 0
+        totalPhysical += physical;
+        totalMissing += missing;
       });
       updateTotalsUI();
     }
@@ -1799,7 +1804,7 @@ if (clearSearchBtn) {
             const physical = parseInt(tr.dataset.physicalCount || '0');  // Use stored physical count
             const missing = parseInt(tr.dataset.missing || '0');
 
-            filteredTheoreticalStock += Math.max(0, theoretical);  // Clamp negative theoretical stock
+            filteredTheoreticalStock += theoretical;
             filteredInstalled += installed;
             filteredPhysical += physical;
             filteredMissing += missing;
@@ -1809,6 +1814,43 @@ if (clearSearchBtn) {
         const filteredDelivered = filteredTheoreticalStock + filteredInstalled;  // Delivered = Theoretical Stock + Installed
 
         console.log('Filtered totals:', {filteredDelivered, filteredInstalled, filteredTheoreticalStock, filteredPhysical, filteredMissing});
+
+        // Data validation for filtered view
+        const expectedFilteredTheoreticalStock = filteredPhysical + filteredMissing;
+        if (filteredTheoreticalStock !== expectedFilteredTheoreticalStock) {
+          // Find cameras with negative theoretical stock in filtered results
+          const problemCameras = [];
+          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+            const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
+            const matchType = (tr.dataset.typeMatch ?? '1') === '1';
+            const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
+            const matchPO = (tr.dataset.poMatch ?? '1') === '1';
+            const matchMissing = !showMissing || (parseInt(tr.dataset.missing || '0') > 0);
+
+            if (matchSearch && matchType && matchLoc && matchPO && matchMissing) {
+              const theoretical = parseInt(tr.dataset.theoretical || '0');
+              if (theoretical < 0) {
+                const code = tr.children[0]?.innerText || 'unknown';
+                const installed = parseInt(tr.dataset.installed || '0');
+                problemCameras.push({code, theoretical, installed});
+              }
+            }
+          });
+
+          if (problemCameras.length > 0) {
+            const warningDiv = document.getElementById('dataValidationWarning');
+            const detailsSpan = document.getElementById('dataErrorDetails');
+            const cameraList = problemCameras.map(c => `${c.code} (installed: ${c.installed}, theoretical: ${c.theoretical})`).join(', ');
+            detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
+            warningDiv.style.display = 'block';
+            console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
+          } else {
+            document.getElementById('dataValidationWarning').style.display = 'none';
+          }
+        } else {
+          document.getElementById('dataValidationWarning').style.display = 'none';
+        }
+
         document.getElementById('sumDelivered').innerText = filteredDelivered;
         document.getElementById('sumInstalled').innerText = filteredInstalled;
         document.getElementById('sumPhysical').innerText = filteredPhysical;
@@ -1820,7 +1862,7 @@ if (clearSearchBtn) {
         document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
           const theoretical = parseInt(tr.dataset.theoretical || '0');
           const installed = parseInt(tr.dataset.installed || '0');
-          allTheoreticalStock += Math.max(0, theoretical);  // Clamp negative theoretical stock
+          allTheoreticalStock += theoretical;
           allInstalled += installed;
         });
 
@@ -1831,6 +1873,34 @@ if (clearSearchBtn) {
                     allTheoreticalStock, '+', allInstalled, '=', allDelivered);
         console.log('Cross-check: Theoretical Stock = Physical + Missing:',
                     totalPhysical, '+', totalMissing, '=', allTheoreticalStock);
+
+        // Data validation: Check if totals cross-cast correctly
+        const expectedTheoreticalStock = totalPhysical + totalMissing;
+        if (allTheoreticalStock !== expectedTheoreticalStock) {
+          // Find cameras with negative theoretical stock (more installed than delivered)
+          const problemCameras = [];
+          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+            const theoretical = parseInt(tr.dataset.theoretical || '0');
+            if (theoretical < 0) {
+              const code = tr.children[0]?.innerText || 'unknown';
+              const installed = parseInt(tr.dataset.installed || '0');
+              problemCameras.push({code, theoretical, installed});
+            }
+          });
+
+          if (problemCameras.length > 0) {
+            const warningDiv = document.getElementById('dataValidationWarning');
+            const detailsSpan = document.getElementById('dataErrorDetails');
+            const cameraList = problemCameras.map(c => `${c.code} (installed: ${c.installed}, theoretical: ${c.theoretical})`).join(', ');
+            detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
+            warningDiv.style.display = 'block';
+            console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
+          } else {
+            document.getElementById('dataValidationWarning').style.display = 'none';
+          }
+        } else {
+          document.getElementById('dataValidationWarning').style.display = 'none';
+        }
 
         document.getElementById('sumDelivered').innerText = allDelivered;
         document.getElementById('sumInstalled').innerText = allInstalled;
@@ -2014,8 +2084,8 @@ if (clearSearchBtn) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
           const wasPhysical = parseInt(r.dataset.physicalCount || '0');
-          const physical = cb.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
-          const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
+          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
           r.dataset.physicalCount = String(physical);
@@ -2505,8 +2575,8 @@ if (clearSearchBtn) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
           const wasPhysical = parseInt(r.dataset.physicalCount || '0');
-          const physical = cb.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
-          const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
+          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
           r.dataset.physicalCount = String(physical);
