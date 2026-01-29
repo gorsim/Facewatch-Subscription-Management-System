@@ -1975,17 +1975,20 @@ if (clearSearchBtn) {
 
     // Export CSV
     function exportCsv() {
-      const rows = [['Camera Code','Cam Type','Delivery Date','Installed','Physical','Missing','Notes','Location']];
+      const rows = [['Camera Code','Cam Type','PO Number','Delivery Date','Installed','Physical','Missing','Notes','Location']];
       document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+        const installedCount = tr.dataset.installed || '0';  // Get installed count from dataset
+        const physicalCount = tr.dataset.physicalCount || '0';  // Get physical count from dataset
         rows.push([
-          tr.children[0].innerText,
-          tr.children[1].innerText,
-          tr.children[2].innerText,
-          tr.children[3].innerText,
-          tr.querySelector('.physical-checkbox')?.checked ? '1' : '0',
-          tr.querySelector('.missing')?.innerText || '0',
-          tr.querySelector('.notes')?.value || '',
-          tr.querySelector('select.location')?.value || ''
+          tr.children[0].innerText,  // Camera Code
+          tr.children[1].innerText,  // Cam Type
+          tr.children[2].innerText,  // PO Number
+          tr.children[3].innerText,  // Delivery Date
+          installedCount,            // Installed (from dataset)
+          physicalCount,             // Physical (from dataset)
+          tr.querySelector('.missing')?.innerText || '0',  // Missing
+          tr.querySelector('.notes')?.value || '',  // Notes
+          tr.querySelector('select.location')?.value || ''  // Location
         ]);
       });
       const csv = rows.map(r => r.map(v => '"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n');
