@@ -1082,76 +1082,7 @@ def save_physical_count():
         description = data.get('description', '')  # optional description
         theoretical_stock = data.get('theoretical_stock', [])
 
-        # ========== DATA LOSS PREVENTION SAFEGUARDS ==========
-
-        # Safeguard 1: Prevent saving if theoretical_stock is empty
-        # EXCEPTION: Allow empty theoretical_stock if:
-        #   a) Both theoretical_stock AND physical_counts are empty (brand new stocktake)
-        #   b) No existing theoretical_stock data exists for this date (stocktake not yet generated)
-
-        if not theoretical_stock or len(theoretical_stock) == 0:
-            # Check if this is a new stocktake (no data exists yet)
-            dated_name = f'physical_state_{date}.json' if date else 'physical_state.json'
-            existing_data = storage_read_json(dated_name, default=None)
-            existing_theoretical = existing_data.get('theoretical_stock', []) if existing_data else []
-
-            # Allow save if no existing theoretical_stock data (new stocktake or not yet generated)
-            if existing_theoretical and len(existing_theoretical) > 0:
-                # Existing theoretical stock exists, but we're trying to save with empty theoretical_stock
-                # This would corrupt the data - block it!
-                return jsonify({
-                    'error': 'Cannot save: theoretical_stock is empty but existing data has stock list. Please generate stock list first or refresh the page.',
-                    'safeguard': 'empty_theoretical_stock'
-                }), 400
-            else:
-                # No existing theoretical stock - this is a new stocktake or hasn't been generated yet
-                # Allow the save (user might be checking boxes before generating stock list)
-                print(f'✓ Allowing save with empty theoretical_stock for date: {date} (new stocktake or not yet generated)')
-
-        # Safeguard 2: Check if we're about to overwrite existing data with suspiciously empty counts
-        if date:
-            dated_name = f'physical_state_{date}.json'
-            existing_data = storage_read_json(dated_name, default=None)
-
-            if existing_data:
-                existing_counts = existing_data.get('physical_counts', {})
-                existing_checked = sum(1 for v in existing_counts.values() if v)
-                new_checked = sum(1 for v in counts.values() if v)
-
-                # If existing data has counts but new data has very few or none
-                if existing_checked > 50 and new_checked < 10:
-                    return jsonify({
-                        'error': f'Data loss prevention: Refusing to overwrite {existing_checked} existing counts with only {new_checked} counts. This appears to be accidental data loss.',
-                        'safeguard': 'count_mismatch',
-                        'existing_checked': existing_checked,
-                        'new_checked': new_checked
-                    }), 400
-
-                # If we're reducing counts by more than 90%, require confirmation
-                if existing_checked > 100 and new_checked < (existing_checked * 0.1):
-                    return jsonify({
-                        'error': f'Data loss prevention: Refusing to reduce counts from {existing_checked} to {new_checked} (>90% reduction). Please verify your data.',
-                        'safeguard': 'massive_reduction',
-                        'existing_checked': existing_checked,
-                        'new_checked': new_checked
-                    }), 400
-
-        # Safeguard 3: Warn if physical_counts seems suspiciously low compared to theoretical_stock
-        # Only check this if we have theoretical_stock data (skip for new stocktakes)
-        if theoretical_stock and len(theoretical_stock) > 0:
-            total_theoretical = len(theoretical_stock)
-            total_physical_checked = sum(1 for v in counts.values() if v)
-
-            # If we have a large theoretical stock but almost no physical counts, something is wrong
-            if total_theoretical > 100 and total_physical_checked < 10:
-                return jsonify({
-                    'error': f'Data loss prevention: You have {total_theoretical} items in theoretical stock but only {total_physical_checked} physical counts. This seems incorrect.',
-                    'safeguard': 'low_physical_counts',
-                    'total_theoretical': total_theoretical,
-                    'total_physical_checked': total_physical_checked
-                }), 400
-
-        # ========== END SAFEGUARDS ==========
+        # Auto-save enabled - save all changes immediately without validation checks
 
         payload = {
             'physical_counts': counts,

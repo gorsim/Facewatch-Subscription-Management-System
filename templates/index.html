@@ -580,93 +580,7 @@
       try {
         const payload = collectStatePayload();
 
-        // CRITICAL: Prevent saving if theoreticalStockData is empty, which would corrupt the file
-        // EXCEPTION: Allow empty theoretical_stock for new stocktakes (no existing data)
-        if (!payload.theoretical_stock || payload.theoretical_stock.length === 0) {
-          // Check if existing data has theoretical_stock
-          try {
-            const currentDate = getSelectedDate();
-            const checkRes = await fetch('/load_physical_state?date=' + encodeURIComponent(currentDate));
-            const existingData = await checkRes.json();
-
-            if (existingData && existingData.theoretical_stock && existingData.theoretical_stock.length > 0) {
-              // Existing data has theoretical_stock, but we're trying to save with empty theoretical_stock
-              // This would corrupt the data - block it!
-              console.error('❌ Cannot save - no theoretical_stock data loaded but existing data has stock list');
-              showToast('❌ Cannot save: Please refresh the page to load stock list', 'error');
-              statusEl.textContent = '❌ Error: Please refresh page';
-              return;
-            } else {
-              // No existing theoretical_stock - this is a new stocktake or hasn't been generated yet
-              // Allow the save (user might be checking boxes before generating stock list)
-              console.log('✓ Allowing save with empty theoretical_stock (new stocktake or not yet generated)');
-            }
-          } catch (e) {
-            console.warn('Could not check existing theoretical_stock:', e);
-            // If we can't check, allow the save (server will validate)
-          }
-        }
-
-        // ========== CLIENT-SIDE DATA LOSS PREVENTION ==========
-
-        // Count how many physical counts are checked
-        const totalPhysicalChecked = Object.values(payload.physical_counts || {}).filter(v => v).length;
-        const totalTheoreticalItems = payload.theoretical_stock.length;
-
-        // Safeguard 1: Warn if trying to save with very few physical counts
-        if (totalTheoreticalItems > 100 && totalPhysicalChecked < 10) {
-          const proceed = confirm(
-            `⚠️ DATA LOSS WARNING!\n\n` +
-            `You have ${totalTheoreticalItems} items in your stock list but only ${totalPhysicalChecked} physical counts checked.\n\n` +
-            `This could mean you're about to overwrite existing data with empty counts.\n\n` +
-            `Are you ABSOLUTELY SURE you want to save?\n\n` +
-            `Click CANCEL to abort save (recommended)\n` +
-            `Click OK only if you're certain this is correct`
-          );
-
-          if (!proceed) {
-            console.log('✓ Save cancelled by user - data loss prevented');
-            showToast('Save cancelled - data preserved', 'info');
-            statusEl.textContent = 'Save cancelled';
-            return;
-          }
-        }
-
-        // Safeguard 2: Check if we're about to overwrite existing data
-        try {
-          const currentDate = getSelectedDate();
-          const checkRes = await fetch('/load_physical_state?date=' + encodeURIComponent(currentDate));
-          const existingData = await checkRes.json();
-
-          if (existingData && existingData.physical_counts) {
-            const existingChecked = Object.values(existingData.physical_counts).filter(v => v).length;
-
-            // If we're reducing counts by more than 50%, warn the user
-            if (existingChecked > 50 && totalPhysicalChecked < (existingChecked * 0.5)) {
-              const proceed = confirm(
-                `⚠️ MAJOR DATA REDUCTION WARNING!\n\n` +
-                `Existing saved data: ${existingChecked} cameras counted\n` +
-                `New data to save: ${totalPhysicalChecked} cameras counted\n\n` +
-                `You're about to REDUCE the count by ${existingChecked - totalPhysicalChecked} cameras (${Math.round((1 - totalPhysicalChecked/existingChecked) * 100)}% reduction).\n\n` +
-                `This could be accidental data loss!\n\n` +
-                `Click CANCEL to abort (recommended)\n` +
-                `Click OK only if this reduction is intentional`
-              );
-
-              if (!proceed) {
-                console.log('✓ Save cancelled - prevented overwriting existing data');
-                showToast('Save cancelled - existing data preserved', 'info');
-                statusEl.textContent = 'Save cancelled';
-                return;
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Could not check existing data:', e);
-          // Continue with save if we can't check existing data
-        }
-
-        // ========== END CLIENT-SIDE SAFEGUARDS ==========
+        // Auto-save enabled - save all changes immediately without validation checks
 
         const res = await fetch('/save_physical_count', {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -674,29 +588,10 @@
         });
         const data = await res.json();
 
-        // Check for server-side safeguard errors
         if (!res.ok || data.error) {
-          console.error('❌ Server rejected save:', data.error);
-
-          // Show detailed error message
-          let errorMsg = data.error || 'Save failed';
-          if (data.safeguard) {
-            errorMsg = `🛡️ DATA PROTECTION: ${errorMsg}`;
-          }
-
-          showToast(`❌ ${errorMsg}`, 'error');
-          statusEl.textContent = '❌ Save failed - data protected';
-
-          // Show alert for critical errors
-          if (data.safeguard) {
-            alert(
-              `🛡️ DATA LOSS PREVENTION\n\n` +
-              `${data.error}\n\n` +
-              `Your data has been protected from accidental loss.\n\n` +
-              `Please check your data and try again.`
-            );
-          }
-
+          console.error('❌ Save failed:', data.error);
+          showToast(`❌ Save failed: ${data.error || 'Unknown error'}`, 'error');
+          statusEl.textContent = '❌ Save failed';
           return;
         }
 
