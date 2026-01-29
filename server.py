@@ -1085,18 +1085,28 @@ def save_physical_count():
         # ========== DATA LOSS PREVENTION SAFEGUARDS ==========
 
         # Safeguard 1: Prevent saving if theoretical_stock is empty
-        # EXCEPTION: Allow empty theoretical_stock if physical_counts is also empty (new stocktake setup)
-        is_new_stocktake = (not theoretical_stock or len(theoretical_stock) == 0) and \
-                          (not counts or sum(1 for v in counts.values() if v) == 0)
+        # EXCEPTION: Allow empty theoretical_stock if:
+        #   a) Both theoretical_stock AND physical_counts are empty (brand new stocktake)
+        #   b) No existing theoretical_stock data exists for this date (stocktake not yet generated)
 
         if not theoretical_stock or len(theoretical_stock) == 0:
-            if not is_new_stocktake:
+            # Check if this is a new stocktake (no data exists yet)
+            dated_name = f'physical_state_{date}.json' if date else 'physical_state.json'
+            existing_data = storage_read_json(dated_name, default=None)
+            existing_theoretical = existing_data.get('theoretical_stock', []) if existing_data else []
+
+            # Allow save if no existing theoretical_stock data (new stocktake or not yet generated)
+            if existing_theoretical and len(existing_theoretical) > 0:
+                # Existing theoretical stock exists, but we're trying to save with empty theoretical_stock
+                # This would corrupt the data - block it!
                 return jsonify({
-                    'error': 'Cannot save: theoretical_stock is empty. Please generate stock list first.',
+                    'error': 'Cannot save: theoretical_stock is empty but existing data has stock list. Please generate stock list first or refresh the page.',
                     'safeguard': 'empty_theoretical_stock'
                 }), 400
-            # Allow new stocktake creation with empty data
-            print(f'✓ Allowing new stocktake creation for date: {date}')
+            else:
+                # No existing theoretical stock - this is a new stocktake or hasn't been generated yet
+                # Allow the save (user might be checking boxes before generating stock list)
+                print(f'✓ Allowing save with empty theoretical_stock for date: {date} (new stocktake or not yet generated)')
 
         # Safeguard 2: Check if we're about to overwrite existing data with suspiciously empty counts
         if date:
@@ -1127,17 +1137,19 @@ def save_physical_count():
                     }), 400
 
         # Safeguard 3: Warn if physical_counts seems suspiciously low compared to theoretical_stock
-        total_theoretical = len(theoretical_stock)
-        total_physical_checked = sum(1 for v in counts.values() if v)
+        # Only check this if we have theoretical_stock data (skip for new stocktakes)
+        if theoretical_stock and len(theoretical_stock) > 0:
+            total_theoretical = len(theoretical_stock)
+            total_physical_checked = sum(1 for v in counts.values() if v)
 
-        # If we have a large theoretical stock but almost no physical counts, something is wrong
-        if total_theoretical > 100 and total_physical_checked < 10:
-            return jsonify({
-                'error': f'Data loss prevention: You have {total_theoretical} items in theoretical stock but only {total_physical_checked} physical counts. This seems incorrect.',
-                'safeguard': 'low_physical_counts',
-                'total_theoretical': total_theoretical,
-                'total_physical_checked': total_physical_checked
-            }), 400
+            # If we have a large theoretical stock but almost no physical counts, something is wrong
+            if total_theoretical > 100 and total_physical_checked < 10:
+                return jsonify({
+                    'error': f'Data loss prevention: You have {total_theoretical} items in theoretical stock but only {total_physical_checked} physical counts. This seems incorrect.',
+                    'safeguard': 'low_physical_counts',
+                    'total_theoretical': total_theoretical,
+                    'total_physical_checked': total_physical_checked
+                }), 400
 
         # ========== END SAFEGUARDS ==========
 

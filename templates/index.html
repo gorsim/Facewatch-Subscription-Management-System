@@ -581,12 +581,30 @@
         const payload = collectStatePayload();
 
         // CRITICAL: Prevent saving if theoreticalStockData is empty, which would corrupt the file
-        // This can happen when switching dates before data is loaded
+        // EXCEPTION: Allow empty theoretical_stock for new stocktakes (no existing data)
         if (!payload.theoretical_stock || payload.theoretical_stock.length === 0) {
-          console.error('❌ Cannot save - no theoretical_stock data loaded');
-          showToast('❌ Cannot save: Please generate stock list first', 'error');
-          statusEl.textContent = '❌ Error: No stock list generated';
-          return;
+          // Check if existing data has theoretical_stock
+          try {
+            const currentDate = getSelectedDate();
+            const checkRes = await fetch('/load_physical_state?date=' + encodeURIComponent(currentDate));
+            const existingData = await checkRes.json();
+
+            if (existingData && existingData.theoretical_stock && existingData.theoretical_stock.length > 0) {
+              // Existing data has theoretical_stock, but we're trying to save with empty theoretical_stock
+              // This would corrupt the data - block it!
+              console.error('❌ Cannot save - no theoretical_stock data loaded but existing data has stock list');
+              showToast('❌ Cannot save: Please refresh the page to load stock list', 'error');
+              statusEl.textContent = '❌ Error: Please refresh page';
+              return;
+            } else {
+              // No existing theoretical_stock - this is a new stocktake or hasn't been generated yet
+              // Allow the save (user might be checking boxes before generating stock list)
+              console.log('✓ Allowing save with empty theoretical_stock (new stocktake or not yet generated)');
+            }
+          } catch (e) {
+            console.warn('Could not check existing theoretical_stock:', e);
+            // If we can't check, allow the save (server will validate)
+          }
         }
 
         // ========== CLIENT-SIDE DATA LOSS PREVENTION ==========
