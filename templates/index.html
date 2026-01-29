@@ -2152,8 +2152,8 @@ if (clearSearchBtn) {
 
             const uploadData = await uploadRes.json();
             console.log('✅ CSV files uploaded:', uploadData);
-            const deliveredFile = uploadData.delivered_filename;
-            const installedFile = uploadData.installed_filename;
+            const deliveredFile = uploadData.delivered_file;
+            const installedFile = uploadData.installed_file;
 
             // Step 2: Generate the stock list using the uploaded files
             if (statusEl) statusEl.textContent = 'Generating stock list...';
