@@ -1586,8 +1586,8 @@
         const theoretical = parseInt(tr.dataset.theoretical || '0');
         const wasMissing = parseInt(tr.querySelector('.missing').innerText) || 0;
         const wasPhysical = parseInt(tr.dataset.physicalCount || '0');
-        const physical = e.target.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
-        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
+        const physical = e.target.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
+        const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
         tr.dataset.physicalCount = String(physical);
@@ -1746,13 +1746,13 @@ if (clearSearchBtn) {
       totalMissing = 0;
       document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
         const theoretical = parseInt(tr.dataset.theoretical || '0');
-        const physical = tr.querySelector('.physical-checkbox').checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
-        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
+        const physical = tr.querySelector('.physical-checkbox').checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
+        const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
         tr.dataset.physicalCount = String(physical);
-        totalPhysical += physical;
-        totalMissing += missing;
+        totalPhysical += Math.max(0, physical);  // Clamp to 0
+        totalMissing += Math.max(0, missing);  // Clamp to 0
       });
       updateTotalsUI();
     }
@@ -2014,8 +2014,8 @@ if (clearSearchBtn) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
           const wasPhysical = parseInt(r.dataset.physicalCount || '0');
-          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
-          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
+          const physical = cb.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
+          const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
           r.dataset.physicalCount = String(physical);
@@ -2505,8 +2505,8 @@ if (clearSearchBtn) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
           const wasPhysical = parseInt(r.dataset.physicalCount || '0');
-          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
-          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
+          const physical = cb.checked ? Math.max(0, theoretical) : 0;  // All theoretical stock if checked (clamped to 0), 0 if unchecked
+          const missing = Math.max(0, theoretical - physical);  // Clamp to 0 to handle negative theoretical stock
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
           r.dataset.physicalCount = String(physical);
