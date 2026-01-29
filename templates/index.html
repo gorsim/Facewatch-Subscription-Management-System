@@ -1815,38 +1815,35 @@ if (clearSearchBtn) {
 
         console.log('Filtered totals:', {filteredDelivered, filteredInstalled, filteredTheoreticalStock, filteredPhysical, filteredMissing});
 
-        // Data validation for filtered view
-        const expectedFilteredTheoreticalStock = filteredPhysical + filteredMissing;
-        if (filteredTheoreticalStock !== expectedFilteredTheoreticalStock) {
-          // Find cameras with negative theoretical stock in filtered results
-          const problemCameras = [];
-          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
-            const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
-            const matchType = (tr.dataset.typeMatch ?? '1') === '1';
-            const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
-            const matchPO = (tr.dataset.poMatch ?? '1') === '1';
-            const matchMissing = !showMissing || (parseInt(tr.dataset.missing || '0') > 0);
+        // Data validation for filtered view: Always scan for cameras with negative theoretical stock
+        const problemCameras = [];
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          const matchSearch = (tr.dataset.searchMatch ?? '1') === '1';
+          const matchType = (tr.dataset.typeMatch ?? '1') === '1';
+          const matchLoc = (tr.dataset.locMatch ?? '1') === '1';
+          const matchPO = (tr.dataset.poMatch ?? '1') === '1';
+          const matchMissing = !showMissing || (parseInt(tr.dataset.missing || '0') > 0);
 
-            if (matchSearch && matchType && matchLoc && matchPO && matchMissing) {
-              const theoretical = parseInt(tr.dataset.theoretical || '0');
-              if (theoretical < 0) {
-                const code = tr.children[0]?.innerText || 'unknown';
-                const installed = parseInt(tr.dataset.installed || '0');
-                problemCameras.push({code, theoretical, installed});
-              }
+          if (matchSearch && matchType && matchLoc && matchPO && matchMissing) {
+            const theoretical = parseInt(tr.dataset.theoretical || '0');
+            if (theoretical < 0) {
+              const code = tr.children[0]?.innerText || 'unknown';
+              const installed = parseInt(tr.dataset.installed || '0');
+              const delivered = theoretical + installed;  // Calculate delivered from theoretical + installed
+              problemCameras.push({code, theoretical, installed, delivered});
             }
-          });
-
-          if (problemCameras.length > 0) {
-            const warningDiv = document.getElementById('dataValidationWarning');
-            const detailsSpan = document.getElementById('dataErrorDetails');
-            const cameraList = problemCameras.map(c => `${c.code} (installed: ${c.installed}, theoretical: ${c.theoretical})`).join(', ');
-            detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
-            warningDiv.style.display = 'block';
-            console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
-          } else {
-            document.getElementById('dataValidationWarning').style.display = 'none';
           }
+        });
+
+        if (problemCameras.length > 0) {
+          const warningDiv = document.getElementById('dataValidationWarning');
+          const detailsSpan = document.getElementById('dataErrorDetails');
+          const cameraList = problemCameras.map(c =>
+            `${c.code} (delivered: ${c.delivered}, installed: ${c.installed}, theoretical: ${c.theoretical})`
+          ).join(', ');
+          detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
+          warningDiv.style.display = 'block';
+          console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
         } else {
           document.getElementById('dataValidationWarning').style.display = 'none';
         }
@@ -1874,30 +1871,27 @@ if (clearSearchBtn) {
         console.log('Cross-check: Theoretical Stock = Physical + Missing:',
                     totalPhysical, '+', totalMissing, '=', allTheoreticalStock);
 
-        // Data validation: Check if totals cross-cast correctly
-        const expectedTheoreticalStock = totalPhysical + totalMissing;
-        if (allTheoreticalStock !== expectedTheoreticalStock) {
-          // Find cameras with negative theoretical stock (more installed than delivered)
-          const problemCameras = [];
-          document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
-            const theoretical = parseInt(tr.dataset.theoretical || '0');
-            if (theoretical < 0) {
-              const code = tr.children[0]?.innerText || 'unknown';
-              const installed = parseInt(tr.dataset.installed || '0');
-              problemCameras.push({code, theoretical, installed});
-            }
-          });
-
-          if (problemCameras.length > 0) {
-            const warningDiv = document.getElementById('dataValidationWarning');
-            const detailsSpan = document.getElementById('dataErrorDetails');
-            const cameraList = problemCameras.map(c => `${c.code} (installed: ${c.installed}, theoretical: ${c.theoretical})`).join(', ');
-            detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
-            warningDiv.style.display = 'block';
-            console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
-          } else {
-            document.getElementById('dataValidationWarning').style.display = 'none';
+        // Data validation: Always scan for cameras with negative theoretical stock
+        const problemCameras = [];
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          const theoretical = parseInt(tr.dataset.theoretical || '0');
+          if (theoretical < 0) {
+            const code = tr.children[0]?.innerText || 'unknown';
+            const installed = parseInt(tr.dataset.installed || '0');
+            const delivered = theoretical + installed;  // Calculate delivered from theoretical + installed
+            problemCameras.push({code, theoretical, installed, delivered});
           }
+        });
+
+        if (problemCameras.length > 0) {
+          const warningDiv = document.getElementById('dataValidationWarning');
+          const detailsSpan = document.getElementById('dataErrorDetails');
+          const cameraList = problemCameras.map(c =>
+            `${c.code} (delivered: ${c.delivered}, installed: ${c.installed}, theoretical: ${c.theoretical})`
+          ).join(', ');
+          detailsSpan.innerHTML = `<br>Camera(s) with more installs than deliveries: <strong>${cameraList}</strong><br>Please fix the source data (delivered/installed CSVs) and regenerate the stocktake.`;
+          warningDiv.style.display = 'block';
+          console.error('❌ DATA INTEGRITY ERROR: Cameras with negative theoretical stock:', problemCameras);
         } else {
           document.getElementById('dataValidationWarning').style.display = 'none';
         }
