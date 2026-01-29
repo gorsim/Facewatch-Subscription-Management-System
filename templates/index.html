@@ -683,20 +683,39 @@
 
   <!-- New Stocktake Setup Modal -->
   <div id="newStocktakeModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-content" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;">
+    <div class="modal-content" style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
       <h2 style="margin: 0 0 12px; font-size: 20px;">📅 Set Up New Stocktake</h2>
-      <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Create a new stock count with a date and optional description.</p>
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Stock Count Date:</label>
-        <input id="newStocktakeDate" type="date" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+      <p style="color: var(--muted); margin: 0 0 16px; font-size: 14px;">Create a new stock count with CSV files, date, and optional description.</p>
+
+      <!-- Step 1: CSV Files -->
+      <div style="margin-bottom: 20px; padding: 16px; background: #0b1220; border: 1px solid #334155; border-radius: 8px;">
+        <h3 style="margin: 0 0 12px; font-size: 16px; color: var(--accent);">📦 Step 1: Upload CSV Files</h3>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px;">Stock Delivered (CSV):</label>
+          <input id="newStocktakeDelivered" type="file" accept=".csv" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #1e293b; color: #cbd5e1; border: 1px solid #334155; font-size: 14px;" />
+        </div>
+        <div style="margin-bottom: 0;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px;">Cameras Installed (CSV):</label>
+          <input id="newStocktakeInstalled" type="file" accept=".csv" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #1e293b; color: #cbd5e1; border: 1px solid #334155; font-size: 14px;" />
+        </div>
       </div>
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 6px; font-weight: 600;">Description (optional):</label>
-        <input id="newStocktakeDesc" type="text" placeholder="e.g., Monthly count, New delivery check, etc." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #0b1220; color: #cbd5e1; border: 1px solid #334155;" />
+
+      <!-- Step 2: Date & Description -->
+      <div style="margin-bottom: 20px; padding: 16px; background: #0b1220; border: 1px solid #334155; border-radius: 8px;">
+        <h3 style="margin: 0 0 12px; font-size: 16px; color: var(--accent);">📅 Step 2: Stocktake Details</h3>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px;">Stock Count Date:</label>
+          <input id="newStocktakeDate" type="date" style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #1e293b; color: #cbd5e1; border: 1px solid #334155;" />
+        </div>
+        <div style="margin-bottom: 0;">
+          <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px;">Description (optional):</label>
+          <input id="newStocktakeDesc" type="text" placeholder="e.g., Monthly count, New delivery check, etc." style="width: 100%; padding: 8px 10px; border-radius: 8px; background: #1e293b; color: #cbd5e1; border: 1px solid #334155;" />
+        </div>
       </div>
+
       <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: flex-end;">
         <button id="newStocktakeCancel" class="secondary">Cancel</button>
-        <button id="newStocktakeCreate" class="primary">Create Stocktake</button>
+        <button id="newStocktakeCreate" class="primary">Create Stocktake & Generate List</button>
       </div>
     </div>
   </div>
@@ -2086,10 +2105,19 @@ if (clearSearchBtn) {
           console.log('✅ Create stocktake button clicked');
           const date = dateInput.value;
           const desc = descInput.value.trim();
+          const deliveredFileInput = document.getElementById('newStocktakeDelivered');
+          const installedFileInput = document.getElementById('newStocktakeInstalled');
+
           console.log('📝 Stocktake data:', {date, desc});
 
+          // Validation
           if (!date) {
             alert('Please select a date');
+            return;
+          }
+
+          if (!deliveredFileInput.files[0] || !installedFileInput.files[0]) {
+            alert('Please select both CSV files (Stock Delivered and Cameras Installed)');
             return;
           }
 
@@ -2100,25 +2128,35 @@ if (clearSearchBtn) {
 
           // Show loading message
           const statusEl = document.getElementById('status');
-          if (statusEl) statusEl.textContent = 'Creating stocktake and generating stock list...';
+          if (statusEl) statusEl.textContent = 'Uploading CSV files...';
 
           try {
-            // Step 1: Get the last uploaded file names
-            console.log('📂 Fetching last uploaded file names...');
-            const lastUploadRes = await fetch('/load_physical_state');
-            const lastUploadData = await lastUploadRes.json();
-            const deliveredFile = lastUploadData.last_delivered_file;
-            const installedFile = lastUploadData.last_installed_file;
+            // Step 1: Upload the CSV files
+            console.log('📤 Uploading CSV files...');
+            const formData = new FormData();
+            formData.append('delivered', deliveredFileInput.files[0]);
+            formData.append('installed', installedFileInput.files[0]);
 
-            if (!deliveredFile || !installedFile) {
-              alert('No CSV files have been uploaded yet. Please upload the delivered and installed CSV files first.');
-              if (statusEl) statusEl.textContent = 'Error: No CSV files found';
+            const uploadRes = await fetch('/upload_count_csv', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (!uploadRes.ok) {
+              const error = await uploadRes.json();
+              console.error('❌ Failed to upload CSV files:', error);
+              alert(`Failed to upload CSV files: ${error.error || 'Unknown error'}`);
+              if (statusEl) statusEl.textContent = 'Error: Failed to upload CSV files';
               return;
             }
 
-            console.log('✅ Found last uploaded files:', {deliveredFile, installedFile});
+            const uploadData = await uploadRes.json();
+            console.log('✅ CSV files uploaded:', uploadData);
+            const deliveredFile = uploadData.delivered_file;
+            const installedFile = uploadData.installed_file;
 
-            // Step 2: Generate the stock list using the last uploaded files
+            // Step 2: Generate the stock list using the uploaded files
+            if (statusEl) statusEl.textContent = 'Generating stock list...';
             console.log('🔧 Generating stock list...');
             const generateRes = await fetch('/generate_stock', {
               method: 'POST',
@@ -2141,6 +2179,7 @@ if (clearSearchBtn) {
             console.log('✅ Stock list generated:', stockData);
 
             // Step 3: Save the stocktake with the generated theoretical_stock
+            if (statusEl) statusEl.textContent = 'Saving stocktake...';
             const installedMap = {};
             (stockData.theoretical_stock || []).forEach(row => {
               installedMap[row.camera_code] = row.installed || 0;
@@ -2176,6 +2215,7 @@ if (clearSearchBtn) {
             console.log('✅ Stocktake saved successfully:', result);
 
             // Step 4: Reload the page with the new date
+            if (statusEl) statusEl.textContent = 'Stocktake created successfully! Redirecting...';
             console.log('🔄 Redirecting to:', `/?date=${encodeURIComponent(date)}`);
             window.location.href = `/?date=${encodeURIComponent(date)}`;
 
