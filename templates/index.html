@@ -1499,6 +1499,8 @@
             const disabled = (row.theoretical_stock||0) <= 0;
             tr.dataset.theoretical = String(row.theoretical_stock||0);
             tr.dataset.installed = String(row.installed||0);
+            tr.dataset.physicalCount = '0';  // Initialize physical count
+            tr.dataset.missing = String(missing);
             tr.innerHTML = `
               <td>${row.camera_code}</td>
               <td>${row.cam_type || ''}</td>
@@ -1542,6 +1544,8 @@
                 const disabled = (row.theoretical_stock||0) <= 0;
                 tr.dataset.theoretical = String(row.theoretical_stock||0);
                 tr.dataset.installed = String(row.installed||0);
+                tr.dataset.physicalCount = '0';  // Initialize physical count
+                tr.dataset.missing = String(missing);
                 tr.innerHTML = `
                   <td>${row.camera_code}</td>
                   <td>${row.cam_type || ''}</td>
@@ -1581,13 +1585,14 @@
         const tr = e.target.closest('tr');
         const theoretical = parseInt(tr.dataset.theoretical || '0');
         const wasMissing = parseInt(tr.querySelector('.missing').innerText) || 0;
-        const physical = e.target.checked ? 1 : 0;
-        const missing = Math.max(0, theoretical - physical);
+        const wasPhysical = parseInt(tr.dataset.physicalCount || '0');
+        const physical = e.target.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
-          totalPhysical += physical ? 1 : -1;
+        tr.dataset.physicalCount = String(physical);
+          totalPhysical += (physical - wasPhysical);
           totalMissing += (missing - wasMissing);
-          tr.dataset.missing = String(missing);
           updateTotalsUI();
           saveStateDebounced();
           hasUnsavedChanges = true;
@@ -1741,10 +1746,11 @@ if (clearSearchBtn) {
       totalMissing = 0;
       document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
         const theoretical = parseInt(tr.dataset.theoretical || '0');
-        const physical = tr.querySelector('.physical-checkbox').checked ? 1 : 0;
-        const missing = Math.max(0, theoretical - physical);
+        const physical = tr.querySelector('.physical-checkbox').checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+        const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
         tr.querySelector('.missing').innerText = missing;
         tr.dataset.missing = String(missing);
+        tr.dataset.physicalCount = String(physical);
         totalPhysical += physical;
         totalMissing += missing;
       });
@@ -1775,7 +1781,7 @@ if (clearSearchBtn) {
 
       if (hasFilters) {
         // Calculate totals for filtered rows only
-        let filteredDelivered = 0;
+        let filteredTheoreticalStock = 0;
         let filteredInstalled = 0;
         let filteredPhysical = 0;
         let filteredMissing = 0;
@@ -1790,35 +1796,41 @@ if (clearSearchBtn) {
           if (matchSearch && matchType && matchLoc && matchPO && matchMissing) {
             const theoretical = parseInt(tr.dataset.theoretical || '0');
             const installed = parseInt(tr.dataset.installed || '0');
-            const physical = tr.querySelector('.physical-checkbox')?.checked ? 1 : 0;
+            const physical = parseInt(tr.dataset.physicalCount || '0');  // Use stored physical count
             const missing = parseInt(tr.dataset.missing || '0');
 
-            filteredDelivered += theoretical + installed;  // Delivered = Theoretical + Installed
+            filteredTheoreticalStock += theoretical;
             filteredInstalled += installed;
             filteredPhysical += physical;
             filteredMissing += missing;
           }
         });
 
-        console.log('Filtered totals:', {filteredDelivered, filteredInstalled, filteredPhysical, filteredMissing});
+        const filteredDelivered = filteredTheoreticalStock + filteredInstalled;  // Delivered = Theoretical Stock + Installed
+
+        console.log('Filtered totals:', {filteredDelivered, filteredInstalled, filteredTheoreticalStock, filteredPhysical, filteredMissing});
         document.getElementById('sumDelivered').innerText = filteredDelivered;
         document.getElementById('sumInstalled').innerText = filteredInstalled;
         document.getElementById('sumPhysical').innerText = filteredPhysical;
         document.getElementById('sumMissing').innerText = filteredMissing;
       } else {
         // No filters - recalculate totals from all rows to ensure accuracy
-        let allDelivered = 0;
+        let allTheoreticalStock = 0;
         let allInstalled = 0;
         document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
           const theoretical = parseInt(tr.dataset.theoretical || '0');
           const installed = parseInt(tr.dataset.installed || '0');
-          allDelivered += theoretical + installed;  // Delivered = Theoretical + Installed
+          allTheoreticalStock += theoretical;
           allInstalled += installed;
         });
 
-        console.log('All totals:', {allDelivered, allInstalled, totalPhysical, totalMissing});
-        console.log('Cross-check: Delivered should equal Installed + Physical + Missing:',
-                    allInstalled + totalPhysical + totalMissing, '=', allDelivered);
+        const allDelivered = allTheoreticalStock + allInstalled;  // Delivered = Theoretical Stock + Installed
+
+        console.log('All totals:', {allDelivered, allInstalled, allTheoreticalStock, totalPhysical, totalMissing});
+        console.log('Cross-check: Delivered = Theoretical Stock + Installed:',
+                    allTheoreticalStock, '+', allInstalled, '=', allDelivered);
+        console.log('Cross-check: Theoretical Stock = Physical + Missing:',
+                    totalPhysical, '+', totalMissing, '=', allTheoreticalStock);
 
         document.getElementById('sumDelivered').innerText = allDelivered;
         document.getElementById('sumInstalled').innerText = allInstalled;
@@ -2001,11 +2013,13 @@ if (clearSearchBtn) {
         if (prev !== cb.checked) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
-          const physical = cb.checked ? 1 : 0;
-          const missing = Math.max(0, theoretical - physical);
+          const wasPhysical = parseInt(r.dataset.physicalCount || '0');
+          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
-          totalPhysical += (cb.checked ? 1 : 0) - (prev ? 1 : 0);
+          r.dataset.physicalCount = String(physical);
+          totalPhysical += (physical - wasPhysical);
           totalMissing += (missing - wasMissing);
           hasUnsavedChanges = true;
         }
@@ -2490,11 +2504,13 @@ if (clearSearchBtn) {
         if (prev !== cb.checked) {
           const theoretical = parseInt(r.dataset.theoretical || '0');
           const wasMissing = parseInt(r.querySelector('.missing').innerText) || 0;
-          const physical = cb.checked ? 1 : 0;
-          const missing = Math.max(0, theoretical - physical);
+          const wasPhysical = parseInt(r.dataset.physicalCount || '0');
+          const physical = cb.checked ? theoretical : 0;  // All theoretical stock if checked, 0 if unchecked
+          const missing = theoretical - physical;  // 0 if checked, theoretical if unchecked
           r.querySelector('.missing').innerText = missing;
           r.dataset.missing = String(missing);
-          totalPhysical += (cb.checked ? 1 : 0) - (prev ? 1 : 0);
+          r.dataset.physicalCount = String(physical);
+          totalPhysical += (physical - wasPhysical);
           totalMissing += (missing - wasMissing);
           hasUnsavedChanges = true;
         }
