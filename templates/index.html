@@ -1793,7 +1793,7 @@ if (clearSearchBtn) {
             const physical = tr.querySelector('.physical-checkbox')?.checked ? 1 : 0;
             const missing = parseInt(tr.dataset.missing || '0');
 
-            filteredDelivered += theoretical;
+            filteredDelivered += theoretical + installed;  // Delivered = Theoretical + Installed
             filteredInstalled += installed;
             filteredPhysical += physical;
             filteredMissing += missing;
@@ -1806,10 +1806,22 @@ if (clearSearchBtn) {
         document.getElementById('sumPhysical').innerText = filteredPhysical;
         document.getElementById('sumMissing').innerText = filteredMissing;
       } else {
-        // No filters - use global totals (already calculated from all data)
-        console.log('All totals:', {totalDelivered, totalInstalled, totalPhysical, totalMissing});
-        document.getElementById('sumDelivered').innerText = totalDelivered;
-        document.getElementById('sumInstalled').innerText = totalInstalled;
+        // No filters - recalculate totals from all rows to ensure accuracy
+        let allDelivered = 0;
+        let allInstalled = 0;
+        document.querySelectorAll('#stockTable tbody tr').forEach(tr => {
+          const theoretical = parseInt(tr.dataset.theoretical || '0');
+          const installed = parseInt(tr.dataset.installed || '0');
+          allDelivered += theoretical + installed;  // Delivered = Theoretical + Installed
+          allInstalled += installed;
+        });
+
+        console.log('All totals:', {allDelivered, allInstalled, totalPhysical, totalMissing});
+        console.log('Cross-check: Delivered should equal Installed + Physical + Missing:',
+                    allInstalled + totalPhysical + totalMissing, '=', allDelivered);
+
+        document.getElementById('sumDelivered').innerText = allDelivered;
+        document.getElementById('sumInstalled').innerText = allInstalled;
         document.getElementById('sumPhysical').innerText = totalPhysical;
         document.getElementById('sumMissing').innerText = totalMissing;
       }
