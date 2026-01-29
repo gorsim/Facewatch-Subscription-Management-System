@@ -2134,10 +2134,10 @@ if (clearSearchBtn) {
             // Step 1: Upload the CSV files
             console.log('📤 Uploading CSV files...');
             const formData = new FormData();
-            formData.append('delivered', deliveredFileInput.files[0]);
-            formData.append('installed', installedFileInput.files[0]);
+            formData.append('delivered_file', deliveredFileInput.files[0]);
+            formData.append('installed_file', installedFileInput.files[0]);
 
-            const uploadRes = await fetch('/upload_count_csv', {
+            const uploadRes = await fetch('/upload', {
               method: 'POST',
               body: formData
             });
@@ -2152,8 +2152,8 @@ if (clearSearchBtn) {
 
             const uploadData = await uploadRes.json();
             console.log('✅ CSV files uploaded:', uploadData);
-            const deliveredFile = uploadData.delivered_file;
-            const installedFile = uploadData.installed_file;
+            const deliveredFile = uploadData.delivered_filename;
+            const installedFile = uploadData.installed_filename;
 
             // Step 2: Generate the stock list using the uploaded files
             if (statusEl) statusEl.textContent = 'Generating stock list...';
