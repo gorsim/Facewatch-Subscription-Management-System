@@ -399,43 +399,47 @@ class InvoiceAutoGenerationService {
     private function calculateNextDate($baseDate, $periods = 1, $paymentFrequency = 'annual') {
         $date = new DateTime($baseDate);
         $originalDay = (int)$date->format('d');
+        $originalMonth = (int)$date->format('m');
+        $originalYear = (int)$date->format('Y');
 
         switch ($paymentFrequency) {
             case 'monthly':
-                // Add months while preserving the day of month
-                for ($i = 0; $i < $periods; $i++) {
-                    $date->modify('+1 month');
-                    // If the day changed (e.g., Jan 31 -> Mar 3), set to last day of target month
-                    $newDay = (int)$date->format('d');
-                    if ($newDay < $originalDay) {
-                        $date->modify('last day of previous month');
-                    }
-                }
-                break;
+                // Calculate target month and year
+                $totalMonths = $originalMonth + $periods;
+                $targetYear = $originalYear + floor(($totalMonths - 1) / 12);
+                $targetMonth = (($totalMonths - 1) % 12) + 1;
+
+                // Get the last day of the target month
+                $lastDayOfTargetMonth = (int)date('t', mktime(0, 0, 0, $targetMonth, 1, $targetYear));
+
+                // Use the original day, or last day of month if original day doesn't exist
+                $targetDay = min($originalDay, $lastDayOfTargetMonth);
+
+                return sprintf('%04d-%02d-%02d', $targetYear, $targetMonth, $targetDay);
+
             case 'quarterly':
-                // Add quarters (3 months) while preserving the day of month
-                for ($i = 0; $i < $periods; $i++) {
-                    $date->modify('+3 months');
-                    // If the day changed, set to last day of target month
-                    $newDay = (int)$date->format('d');
-                    if ($newDay < $originalDay) {
-                        $date->modify('last day of previous month');
-                    }
-                }
-                break;
+                // Quarterly is just monthly * 3
+                $totalMonths = $originalMonth + ($periods * 3);
+                $targetYear = $originalYear + floor(($totalMonths - 1) / 12);
+                $targetMonth = (($totalMonths - 1) % 12) + 1;
+
+                $lastDayOfTargetMonth = (int)date('t', mktime(0, 0, 0, $targetMonth, 1, $targetYear));
+                $targetDay = min($originalDay, $lastDayOfTargetMonth);
+
+                return sprintf('%04d-%02d-%02d', $targetYear, $targetMonth, $targetDay);
+
             case 'annual':
             default:
-                // Annual should naturally preserve the day (except Feb 29 in non-leap years)
-                $date->modify("+{$periods} year");
-                // Handle Feb 29 edge case
-                $newDay = (int)$date->format('d');
-                if ($newDay < $originalDay) {
-                    $date->modify('last day of previous month');
-                }
-                break;
-        }
+                // For annual, just add years
+                $targetYear = $originalYear + $periods;
+                $targetMonth = $originalMonth;
 
-        return $date->format('Y-m-d');
+                // Handle Feb 29 in non-leap years
+                $lastDayOfTargetMonth = (int)date('t', mktime(0, 0, 0, $targetMonth, 1, $targetYear));
+                $targetDay = min($originalDay, $lastDayOfTargetMonth);
+
+                return sprintf('%04d-%02d-%02d', $targetYear, $targetMonth, $targetDay);
+        }
     }
 
     /**

@@ -2,21 +2,22 @@
 
 ## Problems Fixed
 
-### 1. Date Calculation Not Preserving Day-of-Month
+### 1. Date Calculation Loop Bug (CRITICAL)
 
-**Problem:** When generating forecast invoices, the system was using `DateTime::modify("+1 month")` which doesn't preserve the day of the month. For example:
-- October 31st + 1 month = December 1st (not November 30th)
-- January 31st + 1 month = March 3rd (not February 28th)
+**Problem:** The `calculateNextDate()` method had a critical bug where it was adding months ONE AT A TIME in a loop, and trying to fix overflow by going to "last day of previous month". This caused an infinite loop:
+- Oct 31 + 1 month = Nov 30 (Nov doesn't have 31 days)
+- Code sees day changed from 31 to 30
+- Code runs "last day of previous month" = Oct 31 (goes BACK!)
+- Next loop iteration: Oct 31 + 1 month = Nov 30 again
+- Result: ALL forecast invoices had the same date!
 
-This caused invoice dates to drift across the chain (31st → 1st → 31st pattern).
+**Solution:** Completely rewrote `calculateNextDate()` to:
+- Calculate the target month and year mathematically (not using DateTime loops)
+- Determine the last day of the target month
+- Use the original day, or last day of month if original day doesn't exist
+- No loops, no DateTime overflow issues
 
-**Solution:** Modified `InvoiceAutoGenerationService::calculateNextDate()` to:
-- Store the original day of the month
-- Add the period (month/quarter/year)
-- Check if the day changed due to month overflow
-- If it did, set to the last day of the target month
-
-**Result:** Invoices now maintain consistent dates:
+**Result:** Invoices now maintain consistent progressive dates:
 - Monthly on 31st: Oct 31 → Nov 30 → Dec 31 → Jan 31 → Feb 28/29 → Mar 31
 - Quarterly on 31st: Jan 31 → Apr 30 → Jul 31 → Oct 31
 - Annual on 31st: Jan 31 2025 → Jan 31 2026 → Jan 31 2027
