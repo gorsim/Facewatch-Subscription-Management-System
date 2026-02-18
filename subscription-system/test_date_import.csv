@@ -1,0 +1,4 @@
+Invoice ID,Invoice Number,Contact Name,Date,Amount Due,Status
+TEST-001,XERO-TEST-001,Test Company Ltd,16/2/26,1000.00,AUTHORISED
+TEST-002,XERO-TEST-002,Another Company,5/3/26,2000.00,AUTHORISED
+

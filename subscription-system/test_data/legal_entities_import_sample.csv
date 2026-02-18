@@ -1,0 +1,5 @@
+Legal Entity Name,Legal Entity ID,Xero Company Name,Payment Frequency,Pricing Type,Installation Date,Category,Sales Credit
+Test Company Ltd,TEST001,Test Company Limited,Annual,default,2024-01-15,Retail,John Smith
+Another Business,TEST002,Another Business Ltd,Quarterly,default,2024-02-01,Hospitality,Jane Doe
+Monthly Subscriber,TEST003,Monthly Sub Ltd,Monthly,default,2024-03-10,Retail,John Smith
+

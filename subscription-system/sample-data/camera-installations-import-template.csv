@@ -1,0 +1,9 @@
+Store ID,Store Name,Installation Date,Camera Type,Invoice Number,Removal Date,Notes
+LE0001-001,ADES Limited - Main Store,2024-01-15,main,INV-2024-001,,Initial installation
+LE0001-001,ADES Limited - Main Store,2024-01-15,additional,INV-2024-001,,Initial installation
+LE0001-001,ADES Limited - Main Store,2024-02-10,additional,INV-2024-015,,Additional camera added
+LE0001-002,ADES Limited - Branch 2,2024-02-20,main,INV-2024-020,,New store setup
+LE0001-002,ADES Limited - Branch 2,2024-02-20,additional,INV-2024-020,,New store setup
+LE0002-001,AF Blakemore - Main Store,2024-01-10,main,INV-2024-005,,Initial installation
+LE0002-001,AF Blakemore - Main Store,2024-03-15,main,INV-2024-030,2024-06-01,Camera replaced
+

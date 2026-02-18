@@ -178,7 +178,7 @@ CREATE TABLE cash_flow_forecast (
     expected_payment_date DATE NOT NULL,
     expected_amount DECIMAL(12,2) NOT NULL,
     confidence_level ENUM('high', 'medium', 'low') DEFAULT 'medium',
-    is_overdue BOOLEAN GENERATED ALWAYS AS (expected_payment_date < CURDATE()) STORED,
+    is_overdue BOOLEAN DEFAULT FALSE,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

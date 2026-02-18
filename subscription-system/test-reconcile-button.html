@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Reconcile Button</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn-success {
+            background: #5cb85c;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #4cae4c;
+        }
+        .card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Reconcile to Xero Button</h1>
+    
+    <div class="card">
+        <h2>Test Invoice: INV-011</h2>
+        <p><strong>Status:</strong> Issued</p>
+        <p><strong>Amount:</strong> £16,420.00</p>
+        
+        <button onclick="reconcileToXero()" class="btn btn-success">
+            ✅ Reconcile to Xero
+        </button>
+        
+        <button onclick="testAlert()" class="btn btn-success">
+            🧪 Test Alert (Simple Test)
+        </button>
+    </div>
+    
+    <div id="result" class="result"></div>
+    
+    <div class="card">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Click the "Test Alert" button first to verify JavaScript is working</li>
+            <li>Then click "Reconcile to Xero" button</li>
+            <li>Enter test values when prompted</li>
+            <li>Check if the prompts appear correctly</li>
+        </ol>
+    </div>
+
+    <script>
+    function testAlert() {
+        alert('✅ JavaScript is working!\n\nIf you see this message, JavaScript is enabled and functioning.');
+    }
+    
+    function reconcileToXero() {
+        console.log('reconcileToXero() function called');
+        
+        const xeroInvoiceId = prompt('Enter Xero Invoice ID:');
+        console.log('Xero Invoice ID entered:', xeroInvoiceId);
+        
+        if (!xeroInvoiceId) {
+            console.log('User cancelled or entered empty Xero ID');
+            return;
+        }
+
+        const xeroInvoiceNumber = prompt('Enter Xero Invoice Number:');
+        console.log('Xero Invoice Number entered:', xeroInvoiceNumber);
+        
+        if (!xeroInvoiceNumber) {
+            console.log('User cancelled or entered empty Xero Number');
+            return;
+        }
+
+        if (confirm('Reconcile this invoice to Xero?\n\nXero ID: ' + xeroInvoiceId + '\nXero Number: ' + xeroInvoiceNumber + '\n\nThis will lock the invoice and prevent further edits.')) {
+            console.log('User confirmed reconciliation');
+            
+            // Instead of redirecting, show result
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<h3>✅ Success!</h3>' +
+                '<p><strong>Xero Invoice ID:</strong> ' + xeroInvoiceId + '</p>' +
+                '<p><strong>Xero Invoice Number:</strong> ' + xeroInvoiceNumber + '</p>' +
+                '<p>In the real system, this would redirect to:</p>' +
+                '<code>?page=invoices&action=reconcile_to_xero&id=18&xero_id=' + encodeURIComponent(xeroInvoiceId) + '&xero_number=' + encodeURIComponent(xeroInvoiceNumber) + '</code>';
+        } else {
+            console.log('User cancelled confirmation');
+        }
+    }
+    </script>
+</body>
+</html>
+
