@@ -304,8 +304,9 @@ class InvoiceAutoGenerationService {
         // Generate invoice number
         $invoiceNumber = $this->generateForecastInvoiceNumber();
 
-        // Calculate next generation date
-        $nextGenDate = $this->calculateNextDate($forecastDate, 1, $parent['payment_frequency']);
+        // For forecast invoices, next_generation_date should be the invoice date itself
+        // (when the forecast should be converted to an actual invoice)
+        $nextGenDate = $forecastDate;
 
         // Create forecast invoice
         $invoiceId = $this->db->insert('invoices', [
