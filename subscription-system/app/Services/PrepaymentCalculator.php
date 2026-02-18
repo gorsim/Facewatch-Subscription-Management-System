@@ -129,8 +129,8 @@ class PrepaymentCalculator {
             $plRecognized += ($invoiceAmount / 12) * $middleMonths;
         }
 
-        // Final month: 0.5/12th (only if we've reached the final month)
-        if ($monthsSinceInvoice >= $monthsInPeriod - 1) {
+        // Final month: 0.5/12th (only if we've reached or passed the final month)
+        if ($monthsSinceInvoice >= $monthsInPeriod) {
             $plRecognized += ($invoiceAmount / 12) * 0.5;
         }
 
