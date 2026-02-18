@@ -67,6 +67,8 @@ $db_allocations = $db->fetchAll(
         s.store_name,
         s.store_id as store_code,
         ci.installation_date,
+        ci.camera_name,
+        ci.safr_code,
         ica.camera_type
      FROM invoice_camera_allocations ica
      JOIN stores s ON ica.store_id = s.id
@@ -550,6 +552,8 @@ require __DIR__ . '/../layouts/header.php';
                 <tr>
                     <th>Store</th>
                     <th>Store ID</th>
+                    <th>Camera Name</th>
+                    <th>SAFR Code</th>
                     <th>Pricing Tier</th>
                     <th>Installation Date</th>
                     <th>Price Charged</th>
@@ -567,6 +571,20 @@ require __DIR__ . '/../layouts/header.php';
                             <?= htmlspecialchars($store['store_code']) ?>
                         </td>
                         <?php endif; ?>
+                        <td>
+                            <?php if (!empty($camera['camera_name'])): ?>
+                                <?= htmlspecialchars($camera['camera_name']) ?>
+                            <?php else: ?>
+                                <span style="color: #999; font-style: italic;">Not set</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if (!empty($camera['safr_code'])): ?>
+                                <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;"><?= htmlspecialchars($camera['safr_code']) ?></code>
+                            <?php else: ?>
+                                <span style="color: #999; font-style: italic;">-</span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <span class="badge <?= $camera['pricing_tier'] === 'First Camera' ? 'badge-success' : 'badge-info' ?>" style="font-size: 0.9em;">
                                 <?= $camera['pricing_tier'] ?>
@@ -586,7 +604,7 @@ require __DIR__ . '/../layouts/header.php';
             </tbody>
             <tfoot>
                 <tr style="background: #f8f9fa; font-weight: bold;">
-                    <td colspan="4">TOTAL (<?= count($individualCameras) ?> cameras)</td>
+                    <td colspan="6">TOTAL (<?= count($individualCameras) ?> cameras)</td>
                     <td><strong>£<?= number_format($totalAllocated, 2) ?></strong></td>
                 </tr>
             </tfoot>

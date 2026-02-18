@@ -141,12 +141,22 @@ class PrepaymentCalculator {
     /**
      * Calculate number of complete months between two dates
      *
+     * Fixed to handle end-of-month dates correctly (e.g., Jan 31 to Feb 28)
+     * by comparing the first day of each month rather than the actual dates.
+     *
      * @param DateTime $start Start date
      * @param DateTime $end End date
      * @return int Number of complete months
      */
     private function getMonthsBetween($start, $end) {
-        $interval = $start->diff($end);
+        // Clone dates and set to first day of month for accurate month counting
+        $startMonth = clone $start;
+        $startMonth->modify('first day of this month');
+
+        $endMonth = clone $end;
+        $endMonth->modify('first day of this month');
+
+        $interval = $startMonth->diff($endMonth);
         return ($interval->y * 12) + $interval->m;
     }
 

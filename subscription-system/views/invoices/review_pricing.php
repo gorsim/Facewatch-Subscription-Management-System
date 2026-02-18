@@ -202,6 +202,7 @@ require __DIR__ . '/../layouts/header.php';
                     <tr>
                         <th>Store</th>
                         <th>Camera</th>
+                        <th>SAFR Code</th>
                         <th>Type</th>
                         <th>Pricing Tier</th>
                         <th style="text-align: right;">Price</th>
@@ -218,6 +219,13 @@ require __DIR__ . '/../layouts/header.php';
                     <tr>
                         <td><?= $showStore ? htmlspecialchars($camera['store_name']) : '' ?></td>
                         <td><?= htmlspecialchars($camera['camera_name'] ?? 'Camera ' . $camera['id']) ?></td>
+                        <td>
+                            <?php if (!empty($camera['safr_code'])): ?>
+                                <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;"><?= htmlspecialchars($camera['safr_code']) ?></code>
+                            <?php else: ?>
+                                <span style="color: #999; font-style: italic; font-size: 0.9em;">-</span>
+                            <?php endif; ?>
+                        </td>
                         <td><span class="badge badge-info"><?= ucfirst($camera['camera_type']) ?></span></td>
                         <td><span class="badge <?= $allocation['tier'] === 'First Camera' ? 'badge-success' : 'badge-secondary' ?>"><?= $allocation['tier'] ?></span></td>
                         <td style="text-align: right;">

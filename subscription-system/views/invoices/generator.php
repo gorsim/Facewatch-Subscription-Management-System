@@ -146,6 +146,7 @@ require __DIR__ . '/../layouts/header.php';
                             <th>Legal Entity</th>
                             <th>Store Name</th>
                             <th>Camera Name</th>
+                            <th>SAFR Code</th>
                             <th>Camera Type</th>
                             <th>Installation Date</th>
                             <th>Invoice Period</th>
@@ -184,6 +185,13 @@ require __DIR__ . '/../layouts/header.php';
                             <td>
                                 <?php if (!empty($camera['camera_name'])): ?>
                                     <?= htmlspecialchars($camera['camera_name']) ?>
+                                <?php else: ?>
+                                    <span style="color: #999; font-style: italic;">Not set</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($camera['safr_code'])): ?>
+                                    <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"><?= htmlspecialchars($camera['safr_code']) ?></code>
                                 <?php else: ?>
                                     <span style="color: #999; font-style: italic;">Not set</span>
                                 <?php endif; ?>

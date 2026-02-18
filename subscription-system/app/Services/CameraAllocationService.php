@@ -269,6 +269,8 @@ class CameraAllocationService {
         return $this->db->fetchAll(
             "SELECT ica.*,
                     ci.camera_type,
+                    ci.camera_name,
+                    ci.safr_code,
                     ci.installation_date,
                     ci.removal_date,
                     s.store_name,

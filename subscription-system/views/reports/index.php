@@ -387,85 +387,204 @@ require __DIR__ . '/../layouts/header.php';
     // Get selected date or default to today
     $selectedDate = $_GET['snapshot_date'] ?? date('Y-m-d');
 
-    // Get all stores with their camera counts for the selected snapshot date
+    // Get filter values
+    $filterLegalEntity = $_GET['filter_legal_entity'] ?? '';
+    $filterCameraType = $_GET['filter_camera_type'] ?? '';
+    $filterStatus = $_GET['filter_status'] ?? 'active';
+    $searchTerm = $_GET['search'] ?? '';
+
+    // Build WHERE conditions
+    $whereConditions = ["ci.installation_date <= :snapshot_date"];
+    $params = ['snapshot_date' => $selectedDate];
+
+    // Status filter
+    if ($filterStatus === 'active') {
+        $whereConditions[] = "(ci.removal_date IS NULL OR ci.removal_date > :snapshot_date2)";
+        $params['snapshot_date2'] = $selectedDate;
+    } elseif ($filterStatus === 'removed') {
+        $whereConditions[] = "ci.removal_date IS NOT NULL AND ci.removal_date <= :snapshot_date3";
+        $params['snapshot_date3'] = $selectedDate;
+    }
+    // 'all' status = no additional filter
+
+    // Legal entity filter
+    if ($filterLegalEntity) {
+        $whereConditions[] = "le.id = :legal_entity_id";
+        $params['legal_entity_id'] = $filterLegalEntity;
+    }
+
+    // Camera type filter
+    if ($filterCameraType) {
+        $whereConditions[] = "ci.camera_type = :camera_type";
+        $params['camera_type'] = $filterCameraType;
+    }
+
+    // Search filter
+    if ($searchTerm) {
+        $whereConditions[] = "(st.store_name LIKE :search OR ci.camera_name LIKE :search2 OR ci.safr_code LIKE :search3)";
+        $params['search'] = '%' . $searchTerm . '%';
+        $params['search2'] = '%' . $searchTerm . '%';
+        $params['search3'] = '%' . $searchTerm . '%';
+    }
+
+    $whereClause = implode(' AND ', $whereConditions);
+
+    // Get all individual cameras for the selected snapshot date
     $cameras = $db->fetchAll("
         SELECT
+            ci.id as camera_id,
+            ci.camera_name,
+            ci.safr_code,
+            ci.camera_type,
+            ci.installation_date,
+            ci.removal_date,
             st.id as store_internal_id,
             st.store_name,
             st.store_id,
             le.legal_entity_name,
-            COUNT(*) as total_cameras
-        FROM stores st
+            le.id as legal_entity_id
+        FROM camera_installations ci
+        JOIN stores st ON ci.store_id = st.id
         JOIN legal_entities le ON st.legal_entity_id = le.id
-        LEFT JOIN camera_installations ci ON ci.store_id = st.id
-            AND ci.installation_date <= :snapshot_date
-            AND (ci.removal_date IS NULL OR ci.removal_date > :snapshot_date2)
-        GROUP BY st.id, st.store_name, st.store_id, le.legal_entity_name
-        HAVING total_cameras > 0
-        ORDER BY le.legal_entity_name, st.store_name
-    ", [
-        'snapshot_date' => $selectedDate,
-        'snapshot_date2' => $selectedDate
-    ]);
+        WHERE $whereClause
+        ORDER BY le.legal_entity_name, st.store_name, ci.installation_date
+    ", $params);
 
-    // Calculate totals
-    $totalCameras = 0;
-    foreach ($cameras as $camera) {
-        $totalCameras += $camera['total_cameras'] ?? 0;
-    }
+    // Get all legal entities for filter dropdown
+    $legalEntities = $db->fetchAll("
+        SELECT DISTINCT le.id, le.legal_entity_name
+        FROM legal_entities le
+        JOIN stores st ON st.legal_entity_id = le.id
+        JOIN camera_installations ci ON ci.store_id = st.id
+        ORDER BY le.legal_entity_name
+    ");
+
+    $totalCameras = count($cameras);
     ?>
 
     <div class="card">
-        <h3>📸 Camera Count Snapshot Report</h3>
+        <h3>📸 Camera Inventory Report</h3>
 
         <form method="GET" style="margin-bottom: 20px;">
             <input type="hidden" name="page" value="reports">
             <input type="hidden" name="report" value="cameras">
-            <div class="form-group" style="max-width: 300px;">
-                <label for="snapshot_date">Select Snapshot Date</label>
-                <input type="date" id="snapshot_date" name="snapshot_date" value="<?= $selectedDate ?>" onchange="this.form.submit()">
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="snapshot_date">Snapshot Date</label>
+                    <input type="date" id="snapshot_date" name="snapshot_date" value="<?= $selectedDate ?>">
+                </div>
+
+                <div class="form-group">
+                    <label for="filter_legal_entity">Legal Entity</label>
+                    <select id="filter_legal_entity" name="filter_legal_entity">
+                        <option value="">All Legal Entities</option>
+                        <?php foreach ($legalEntities as $le): ?>
+                            <option value="<?= $le['id'] ?>" <?= $filterLegalEntity == $le['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($le['legal_entity_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="filter_camera_type">Camera Type</label>
+                    <select id="filter_camera_type" name="filter_camera_type">
+                        <option value="">All Types</option>
+                        <option value="main" <?= $filterCameraType === 'main' ? 'selected' : '' ?>>Main</option>
+                        <option value="additional" <?= $filterCameraType === 'additional' ? 'selected' : '' ?>>Additional</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="filter_status">Status</label>
+                    <select id="filter_status" name="filter_status">
+                        <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Active Only</option>
+                        <option value="removed" <?= $filterStatus === 'removed' ? 'selected' : '' ?>>Removed Only</option>
+                        <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>All Cameras</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="search">Search</label>
+                    <input type="text" id="search" name="search" value="<?= htmlspecialchars($searchTerm) ?>" placeholder="Store, camera, SAFR code...">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="?page=reports&report=cameras" class="btn">Clear Filters</a>
             </div>
         </form>
 
         <p><strong>Snapshot Date: <?= date('d F Y', strtotime($selectedDate)) ?></strong></p>
-        <p><strong>Total Stores: <?= count($cameras) ?></strong></p>
-        <p><strong>Total Cumulative Cameras: <?= number_format($totalCameras) ?></strong></p>
+        <p><strong>Total Cameras: <?= number_format($totalCameras) ?></strong></p>
 
         <?php if (empty($cameras)): ?>
             <div class="alert alert-warning">
-                No cameras found for <?= date('d F Y', strtotime($selectedDate)) ?>.
+                No cameras found matching the selected filters.
             </div>
         <?php else: ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Legal Entity</th>
-                        <th>Store Name</th>
-                        <th>Store ID</th>
-                        <th>Cumulative Cameras</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($cameras as $camera): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($camera['legal_entity_name']) ?></td>
-                        <td>
-                            <a href="?page=stores&action=view&id=<?= $camera['store_internal_id'] ?>" style="color: #0066cc; text-decoration: underline;">
-                                <?= htmlspecialchars($camera['store_name']) ?>
-                            </a>
-                        </td>
-                        <td><?= htmlspecialchars($camera['store_id']) ?></td>
-                        <td><strong><?= number_format($camera['total_cameras'] ?? 0) ?></strong></td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-                <tfoot>
-                    <tr style="background: #f8f9fa; font-weight: bold;">
-                        <td colspan="3">TOTALS</td>
-                        <td><?= number_format($totalCameras) ?></td>
-                    </tr>
-                </tfoot>
-            </table>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Legal Entity</th>
+                            <th>Store Name</th>
+                            <th>Store ID</th>
+                            <th>Camera Name</th>
+                            <th>SAFR Code</th>
+                            <th>Type</th>
+                            <th>Installation Date</th>
+                            <th>Removal Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($cameras as $camera): ?>
+                        <?php
+                            $isActive = empty($camera['removal_date']) || strtotime($camera['removal_date']) > strtotime($selectedDate);
+                            $statusClass = $isActive ? '' : 'style="opacity: 0.6;"';
+                        ?>
+                        <tr <?= $statusClass ?>>
+                            <td><?= htmlspecialchars($camera['legal_entity_name']) ?></td>
+                            <td>
+                                <a href="?page=stores&action=view&id=<?= $camera['store_internal_id'] ?>" style="color: #0066cc; text-decoration: underline;">
+                                    <?= htmlspecialchars($camera['store_name']) ?>
+                                </a>
+                            </td>
+                            <td><?= htmlspecialchars($camera['store_id']) ?></td>
+                            <td><?= htmlspecialchars($camera['camera_name'] ?: '-') ?></td>
+                            <td>
+                                <?php if ($camera['safr_code']): ?>
+                                    <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"><?= htmlspecialchars($camera['safr_code']) ?></code>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span style="padding: 2px 8px; border-radius: 3px; font-size: 0.85em; <?= $camera['camera_type'] === 'main' ? 'background: #e3f2fd; color: #1976d2;' : 'background: #f3e5f5; color: #7b1fa2;' ?>">
+                                    <?= ucfirst($camera['camera_type']) ?>
+                                </span>
+                            </td>
+                            <td><?= date('d M Y', strtotime($camera['installation_date'])) ?></td>
+                            <td><?= $camera['removal_date'] ? date('d M Y', strtotime($camera['removal_date'])) : '-' ?></td>
+                            <td>
+                                <span style="padding: 2px 8px; border-radius: 3px; font-size: 0.85em; <?= $isActive ? 'background: #e8f5e9; color: #2e7d32;' : 'background: #ffebee; color: #c62828;' ?>">
+                                    <?= $isActive ? 'Active' : 'Removed' ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f8f9fa; font-weight: bold;">
+                            <td colspan="8">TOTAL CAMERAS</td>
+                            <td><?= number_format($totalCameras) ?></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         <?php endif; ?>
     </div>
 

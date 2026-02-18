@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'installation_date' => $_POST['installation_date'],
             'camera_type' => $_POST['camera_type'],
             'camera_name' => $_POST['camera_name'] ?: null,
+            'safr_code' => $_POST['safr_code'] ?: null,
             'removal_date' => $_POST['removal_date'] ?: null,
         ], 'id = :id', ['id' => $id]);
 
@@ -99,6 +100,19 @@ require __DIR__ . '/../layouts/header.php';
                        placeholder="e.g., Front door, Back door, Till area">
                 <small style="color: #666;">
                     Optional: Give this camera a descriptive name to identify its location
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="safr_code">SAFR Code</label>
+                <input type="text"
+                       id="safr_code"
+                       name="safr_code"
+                       maxlength="100"
+                       value="<?= htmlspecialchars($installation['safr_code'] ?? '') ?>"
+                       placeholder="e.g., SAFR-001, SAFR-002">
+                <small style="color: #666;">
+                    Optional: SAFR system identifier for this camera
                 </small>
             </div>
 

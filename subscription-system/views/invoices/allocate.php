@@ -310,6 +310,8 @@ require __DIR__ . '/../layouts/header.php';
                 <tr>
                     <th>Store</th>
                     <th>Store ID</th>
+                    <th>Camera Name</th>
+                    <th>SAFR Code</th>
                     <th>Camera Type</th>
                     <th>Installation Date</th>
                     <th>Rate</th>
@@ -326,6 +328,20 @@ require __DIR__ . '/../layouts/header.php';
                 <tr>
                     <td><?= htmlspecialchars($camera['store_name']) ?></td>
                     <td><?= htmlspecialchars($camera['store_code']) ?></td>
+                    <td>
+                        <?php if (!empty($camera['camera_name'])): ?>
+                            <?= htmlspecialchars($camera['camera_name']) ?>
+                        <?php else: ?>
+                            <span style="color: #999; font-style: italic;">Not set</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($camera['safr_code'])): ?>
+                            <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"><?= htmlspecialchars($camera['safr_code']) ?></code>
+                        <?php else: ?>
+                            <span style="color: #999; font-style: italic;">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($camera['camera_type']): ?>
                             <span class="badge <?= $camera['camera_type'] === 'main' ? 'badge-primary' : 'badge-secondary' ?>">
@@ -410,6 +426,8 @@ require __DIR__ . '/../layouts/header.php';
                             </th>
                             <th>Store</th>
                             <th>Store ID</th>
+                            <th>Camera Name</th>
+                            <th>SAFR Code</th>
                             <th>Installation Date</th>
                             <th>Camera Type</th>
                             <th>Rate</th>
@@ -425,6 +443,20 @@ require __DIR__ . '/../layouts/header.php';
                             </td>
                             <td><?= htmlspecialchars($camera['store_name']) ?></td>
                             <td><?= htmlspecialchars($camera['store_id']) ?></td>
+                            <td>
+                                <?php if (!empty($camera['camera_name'])): ?>
+                                    <?= htmlspecialchars($camera['camera_name']) ?>
+                                <?php else: ?>
+                                    <span style="color: #999; font-style: italic;">Not set</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($camera['safr_code'])): ?>
+                                    <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;"><?= htmlspecialchars($camera['safr_code']) ?></code>
+                                <?php else: ?>
+                                    <span style="color: #999; font-style: italic;">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?= date('d/m/Y', strtotime($camera['installation_date'])) ?></td>
                             <td>
                                 <span class="badge <?= $camera['camera_type'] === 'main' ? 'badge-primary' : 'badge-secondary' ?>">
