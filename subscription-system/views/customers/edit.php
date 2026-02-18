@@ -158,6 +158,7 @@ require __DIR__ . '/../layouts/header.php';
             // Use session value if available (preserves selection when returning from pricing page)
             // Otherwise use the database value
             $currentPricingType = $_SESSION['edit_pricing_type_' . $legalEntityId] ?? ($legalEntity['pricing_type'] ?? 'default');
+            error_log("Edit page - Legal Entity ID: $legalEntityId, Session value: " . ($_SESSION['edit_pricing_type_' . $legalEntityId] ?? 'NOT SET') . ", DB value: " . ($legalEntity['pricing_type'] ?? 'NOT SET') . ", Using: $currentPricingType");
             ?>
             <div class="form-group">
                 <label for="pricing_type">Pricing Type *</label>
@@ -205,6 +206,7 @@ require __DIR__ . '/../layouts/header.php';
 
             function savePricingTypeToSession() {
                 var pricingType = document.getElementById('pricing_type').value;
+                console.log('Saving pricing type to session:', pricingType);
                 // Use fetch to save to session without page reload
                 fetch('?page=subscribers&action=save_pricing_type_session', {
                     method: 'POST',
@@ -212,6 +214,13 @@ require __DIR__ . '/../layouts/header.php';
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
                     body: 'legal_entity_id=<?= $legalEntityId ?>&pricing_type=' + pricingType
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Session save response:', data);
+                })
+                .catch(error => {
+                    console.error('Error saving to session:', error);
                 });
             }
             </script>

@@ -56,7 +56,7 @@ try {
             break;
             
         case 'subscribers':
-            if ($action === 'view' || $action === 'edit' || $action === 'new' || $action === 'delete') {
+            if ($action === 'view' || $action === 'edit' || $action === 'new' || $action === 'delete' || $action === 'save_pricing_type_session') {
                 require __DIR__ . '/../views/customers/' . $action . '.php';
             } else {
                 require __DIR__ . '/../views/customers/index.php';
