@@ -55,35 +55,14 @@ try {
         exit;
     }
 
-    // Get TOTAL active cameras for this legal entity to determine pricing tier
-    // Use the invoice date to determine which cameras were active on that date
-    $asOfDate = $invoiceDate;
+    // Use the SELECTED camera count from the form, not the total active cameras
+    // This ensures we price based on what the user selected for this invoice
+    error_log("Using selected camera count: $totalCameras (main: $mainCameras, additional: $additionalCameras)");
 
-    $sql = "SELECT COUNT(*) as total
-            FROM camera_installations ci
-            JOIN stores s ON ci.store_id = s.id
-            WHERE s.legal_entity_id = :legal_entity_id
-            AND ci.installation_date <= :as_of_date
-            AND (ci.removal_date IS NULL OR ci.removal_date > :as_of_date2)";
-
-    $params = [
-        'legal_entity_id' => $legalEntityId,
-        'as_of_date' => $asOfDate,
-        'as_of_date2' => $asOfDate
-    ];
-
-    error_log("SQL: " . $sql);
-    error_log("Params: " . print_r($params, true));
-
-    $totalActiveCameras = $db->fetchOne($sql, $params);
-
-    $totalCameraCount = intval($totalActiveCameras['total'] ?? 0);
-    error_log("Total active cameras for entity $legalEntityId on $asOfDate: $totalCameraCount");
-
-    // Get pricing based on TOTAL camera count (for tier) and invoice date
+    // Get pricing based on SELECTED camera count and invoice date
     $pricing = $pricingService->getPricingForEntity(
         $legalEntityId,
-        $totalCameraCount,
+        $totalCameras,
         $invoiceDate
     );
     
@@ -93,13 +72,13 @@ try {
         $amount = $pricing['total_cost'];
     } else {
         // Volume-based model: rate per camera * camera count
-        $amount = $pricing['rate_to_use'] * $cameraCount;
+        $amount = $pricing['rate_to_use'] * $totalCameras;
     }
 
     $response = [
         'success' => true,
         'amount' => round($amount, 2),
-        'camera_count' => $cameraCount,
+        'camera_count' => $totalCameras,
         'main_cameras' => $mainCameras,
         'additional_cameras' => $additionalCameras,
         'pricing_model' => $pricing['pricing_type'],
