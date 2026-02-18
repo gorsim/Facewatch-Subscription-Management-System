@@ -85,7 +85,7 @@ require __DIR__ . '/../layouts/header.php';
 <div class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1>Edit Legal Entity</h1>
-        <a href="?page=subscribers&action=view&id=<?= $legalEntity['id'] ?>" class="btn">← Cancel</a>
+        <a href="?page=subscribers&action=view&id=<?= $legalEntity['id'] ?>" class="btn" onclick="return confirmCancel()">← Cancel</a>
     </div>
 
     <?php if (isset($error)): ?>
@@ -194,6 +194,36 @@ require __DIR__ . '/../layouts/header.php';
             </div>
 
             <script>
+            // Track if form has been modified
+            var formModified = false;
+            var allowNavigation = false;
+
+            // Mark form as modified when any input changes
+            document.addEventListener('DOMContentLoaded', function() {
+                var form = document.querySelector('form');
+                var inputs = form.querySelectorAll('input, select, textarea');
+
+                inputs.forEach(function(input) {
+                    input.addEventListener('change', function() {
+                        formModified = true;
+                    });
+                });
+
+                // Don't warn when submitting the form
+                form.addEventListener('submit', function() {
+                    allowNavigation = true;
+                });
+            });
+
+            // Warn before leaving if form has been modified
+            window.addEventListener('beforeunload', function(e) {
+                if (formModified && !allowNavigation) {
+                    e.preventDefault();
+                    e.returnValue = ''; // Chrome requires returnValue to be set
+                    return ''; // Some browsers show this message
+                }
+            });
+
             function togglePricingInfo() {
                 var pricingType = document.getElementById('pricing_type').value;
                 document.getElementById('pricing-info-default').style.display = pricingType === 'default' ? '' : 'none';
@@ -206,6 +236,8 @@ require __DIR__ . '/../layouts/header.php';
 
             function savePricingType() {
                 // Called when clicking "Manage Custom Pricing" link
+                // Allow navigation to pricing page without warning
+                allowNavigation = true;
                 savePricingTypeToSession();
             }
 
@@ -228,11 +260,18 @@ require __DIR__ . '/../layouts/header.php';
                     console.error('Error saving to session:', error);
                 });
             }
+
+            function confirmCancel() {
+                if (formModified) {
+                    return confirm('You have unsaved changes. Are you sure you want to leave without saving?');
+                }
+                return true;
+            }
             </script>
 
             <div style="margin-top: 20px;">
                 <button type="submit" class="btn btn-success">Save Changes</button>
-                <a href="?page=subscribers&action=view&id=<?= $legalEntity['id'] ?>" class="btn">Cancel</a>
+                <a href="?page=subscribers&action=view&id=<?= $legalEntity['id'] ?>" class="btn" onclick="return confirmCancel()">Cancel</a>
             </div>
         </form>
     </div>
