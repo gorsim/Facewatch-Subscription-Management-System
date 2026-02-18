@@ -37,10 +37,11 @@ $contract = $db->fetchOne(
 $storeModel = new Store();
 $stores = $storeModel->getByLegalEntity($legalEntityId);
 
-// Store the current pricing_type in session when loading the page
-// This helps preserve the selection when navigating to/from pricing pages
-if (!isset($_POST['pricing_type'])) {
+// Initialize session value ONLY if it doesn't exist yet
+// This preserves the selection when navigating to/from pricing pages
+if (!isset($_SESSION['edit_pricing_type_' . $legalEntityId])) {
     $_SESSION['edit_pricing_type_' . $legalEntityId] = $legalEntity['pricing_type'] ?? 'default';
+    error_log("Initializing session pricing_type for entity $legalEntityId to: " . $_SESSION['edit_pricing_type_' . $legalEntityId]);
 }
 
 // Handle form submission
@@ -64,6 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ], 'id = :id', ['id' => $legalEntityId]);
 
         $db->commit();
+
+        // Clear the session pricing_type now that it's been saved to the database
+        unset($_SESSION['edit_pricing_type_' . $legalEntityId]);
+
         $_SESSION['success'] = 'Legal Entity updated successfully';
         header('Location: ?page=subscribers&action=view&id=' . $legalEntityId);
         exit;
