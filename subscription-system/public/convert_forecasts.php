@@ -11,8 +11,9 @@ require_once __DIR__ . '/../app/Services/InvoiceGenerationService.php';
 require_once __DIR__ . '/../app/Services/PricingService.php';
 
 use App\Services\InvoiceAutoGenerationService;
+use App\Database;
 
-$db = new App\Database();
+$db = Database::getInstance();
 $service = new InvoiceAutoGenerationService();
 
 // Get the date to check (default to today)
