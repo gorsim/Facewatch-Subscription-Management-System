@@ -112,18 +112,18 @@ try {
 
     error_log("create_from_generator.php - Selected cameras: $totalCameras (first: $firstCameras, additional: $additionalCameras)");
 
+    // ALWAYS get pricing information (needed for camera allocation even if amount is overridden)
+    $pricing = $pricingService->getPricingForEntity(
+        $legalEntityId,
+        $totalCameras,  // Use selected camera count
+        $invoiceDate
+    );
+
     // Calculate invoice amount if not overridden
     if ($overrideAmount !== null) {
         $invoiceAmount = $overrideAmount;
+        error_log("create_from_generator.php - Using override amount: £$invoiceAmount");
     } else {
-        // Get pricing from PricingService based on SELECTED camera count (not total active)
-        // This matches the preview calculation in calculate_pricing.php
-        $pricing = $pricingService->getPricingForEntity(
-            $legalEntityId,
-            $totalCameras,  // Use selected camera count
-            $invoiceDate
-        );
-
         // Calculate total amount based on pricing model
         if ($pricing['pricing_type'] === 'first_plus_additional') {
             // First camera + additional model
