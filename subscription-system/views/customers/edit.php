@@ -37,6 +37,12 @@ $contract = $db->fetchOne(
 $storeModel = new Store();
 $stores = $storeModel->getByLegalEntity($legalEntityId);
 
+// Store the current pricing_type in session when loading the page
+// This helps preserve the selection when navigating to/from pricing pages
+if (!isset($_POST['pricing_type'])) {
+    $_SESSION['edit_pricing_type_' . $legalEntityId] = $legalEntity['pricing_type'] ?? 'default';
+}
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db->beginTransaction();
@@ -148,18 +154,23 @@ require __DIR__ . '/../layouts/header.php';
                 </small>
             </div>
 
+            <?php
+            // Use session value if available (preserves selection when returning from pricing page)
+            // Otherwise use the database value
+            $currentPricingType = $_SESSION['edit_pricing_type_' . $legalEntityId] ?? ($legalEntity['pricing_type'] ?? 'default');
+            ?>
             <div class="form-group">
                 <label for="pricing_type">Pricing Type *</label>
                 <select id="pricing_type" name="pricing_type" required onchange="togglePricingInfo()">
-                    <option value="default" <?= ($legalEntity['pricing_type'] ?? 'default') === 'default' ? 'selected' : '' ?>>📊 Use Default Pricing</option>
-                    <option value="custom" <?= ($legalEntity['pricing_type'] ?? 'default') === 'custom' ? 'selected' : '' ?>>🎯 Use Custom Pricing (Entity-specific rates)</option>
+                    <option value="default" <?= $currentPricingType === 'default' ? 'selected' : '' ?>>📊 Use Default Pricing</option>
+                    <option value="custom" <?= $currentPricingType === 'custom' ? 'selected' : '' ?>>🎯 Use Custom Pricing (Entity-specific rates)</option>
                 </select>
                 <small style="display: block; margin-top: 5px; color: #666;">
-                    <span id="pricing-info-default" style="<?= ($legalEntity['pricing_type'] ?? 'default') === 'default' ? '' : 'display:none;' ?>">
+                    <span id="pricing-info-default" style="<?= $currentPricingType === 'default' ? '' : 'display:none;' ?>">
                         This entity will use the standard default pricing. Choose the pricing model below.
                     </span>
-                    <span id="pricing-info-custom" style="<?= ($legalEntity['pricing_type'] ?? 'default') === 'custom' ? '' : 'display:none;' ?>">
-                        This entity has custom pricing rates. <a href="?page=admin&action=entity_pricing&id=<?= $legalEntityId ?>">Manage Custom Pricing →</a>
+                    <span id="pricing-info-custom" style="<?= $currentPricingType === 'custom' ? '' : 'display:none;' ?>">
+                        This entity has custom pricing rates. <a href="?page=admin&action=entity_pricing&id=<?= $legalEntityId ?>" onclick="savePricingType()">Manage Custom Pricing →</a>
                     </span>
                 </small>
             </div>
@@ -182,6 +193,26 @@ require __DIR__ . '/../layouts/header.php';
                 document.getElementById('pricing-info-default').style.display = pricingType === 'default' ? '' : 'none';
                 document.getElementById('pricing-info-custom').style.display = pricingType === 'custom' ? '' : 'none';
                 document.getElementById('pricing-model-group').style.display = pricingType === 'custom' ? 'none' : '';
+
+                // Save the current selection to session via AJAX
+                savePricingTypeToSession();
+            }
+
+            function savePricingType() {
+                // Called when clicking "Manage Custom Pricing" link
+                savePricingTypeToSession();
+            }
+
+            function savePricingTypeToSession() {
+                var pricingType = document.getElementById('pricing_type').value;
+                // Use fetch to save to session without page reload
+                fetch('?page=subscribers&action=save_pricing_type_session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'legal_entity_id=<?= $legalEntityId ?>&pricing_type=' + pricingType
+                });
             }
             </script>
 

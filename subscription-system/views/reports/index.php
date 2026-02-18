@@ -855,7 +855,7 @@ require __DIR__ . '/../layouts/header.php';
                 <li><strong>Prepayments:</strong> Calculated using PrepaymentCalculator service</li>
                 <li><strong>Invoiced:</strong> New invoices issued during the month</li>
                 <li><strong>Terminations:</strong> Excludes months after entity termination date</li>
-                <li><strong>Time Range:</strong> Next 3 years (36 months)</li>
+                <li><strong>Time Range:</strong> Period to March 2031
             </ul>
             <p style="margin: 10px 0 0 0; font-size: 0.9em; color: #666;">
                 <strong>Note:</strong> This shows revenue recognition for accounting purposes,

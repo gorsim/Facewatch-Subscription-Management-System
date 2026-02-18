@@ -117,8 +117,12 @@ require_once __DIR__ . '/../layouts/header.php';
     <div class="page-header">
         <h1>🎯 Custom Pricing: <?= htmlspecialchars($legalEntity['legal_entity_name']) ?></h1>
         <p style="color: #666;">
-            <a href="?page=subscribers&action=view&id=<?= $legalEntityId ?>">← Back to Legal Entity</a> | 
-            <a href="?page=subscribers&action=edit&id=<?= $legalEntityId ?>">Edit Entity Details</a>
+            Configure custom pricing tiers for this entity. When finished, return to the Legal Entity edit page to save your changes.
+        </p>
+        <p style="margin-top: 10px;">
+            <a href="?page=subscribers&action=edit&id=<?= $legalEntityId ?>" class="btn btn-primary">
+                ← Return to Edit Legal Entity
+            </a>
         </p>
     </div>
 
