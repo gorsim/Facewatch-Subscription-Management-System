@@ -15,17 +15,33 @@ $matchingService = new InvoiceMatchingService();
 // Handle CSV upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     try {
+        error_log("Smart Match: Upload started");
         $file = $_FILES['csv_file'];
-        
+        error_log("Smart Match: File error code = " . $file['error']);
+
         if ($file['error'] !== UPLOAD_ERR_OK) {
-            throw new Exception('File upload failed');
+            $errorMessages = [
+                UPLOAD_ERR_INI_SIZE => 'File too large (exceeds server limit)',
+                UPLOAD_ERR_FORM_SIZE => 'File too large (exceeds form limit)',
+                UPLOAD_ERR_PARTIAL => 'File only partially uploaded',
+                UPLOAD_ERR_NO_FILE => 'No file uploaded',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                UPLOAD_ERR_EXTENSION => 'Upload stopped by extension'
+            ];
+            $errorMsg = $errorMessages[$file['error']] ?? 'Unknown upload error';
+            throw new Exception($errorMsg . ' (Error code: ' . $file['error'] . ')');
         }
+
+        error_log("Smart Match: File uploaded successfully: " . $file['name']);
         
         // Read CSV file
+        error_log("Smart Match: Opening file: " . $file['tmp_name']);
         $handle = fopen($file['tmp_name'], 'r');
         if (!$handle) {
-            throw new Exception('Could not open file');
+            throw new Exception('Could not open uploaded file');
         }
+        error_log("Smart Match: File opened successfully");
         
         // Create import session
         $sessionName = $_POST['session_name'] ?? 'Import ' . date('Y-m-d H:i');
@@ -70,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
         // Parse CSV
         $header = fgetcsv($handle);
+        error_log("Smart Match: Header row: " . implode(', ', $header));
         $imported = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
@@ -93,18 +110,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         }
 
         fclose($handle);
-        
+
+        error_log("Smart Match: Imported $imported invoices");
+
         // Update session
         $db->update('xero_import_sessions', [
             'total_invoices' => $imported,
             'status' => 'reviewing'
         ], 'id = :id', ['id' => $sessionId]);
-        
+
+        error_log("Smart Match: Session updated, redirecting to session $sessionId");
         $_SESSION['success'] = "Imported $imported invoices successfully!";
         header("Location: ?page=invoices&action=smart_match&session=$sessionId");
         exit;
-        
+
     } catch (Exception $e) {
+        error_log("Smart Match ERROR: " . $e->getMessage());
+        error_log("Smart Match ERROR trace: " . $e->getTraceAsString());
         $_SESSION['error'] = 'Import failed: ' . $e->getMessage();
     }
 }
@@ -165,6 +187,25 @@ require __DIR__ . '/../layouts/header.php';
         <h1>🤖 Smart Invoice Matching</h1>
         <a href="?page=invoices" class="btn">← Back to Invoices</a>
     </div>
+
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-error" style="background: #f8d7da; border: 2px solid #f5c6cb; padding: 20px; margin-bottom: 20px;">
+            <h3>⚠️ Upload Error</h3>
+            <p style="margin: 10px 0; font-size: 16px;"><?= htmlspecialchars($_SESSION['error']) ?></p>
+            <p style="margin: 10px 0; color: #666;">
+                <strong>Tip:</strong> Check the error log for more details. The error has been logged for debugging.
+            </p>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['success'])): ?>
+        <div class="alert alert-success" style="background: #d4edda; border: 2px solid #c3e6cb; padding: 20px; margin-bottom: 20px;">
+            <h3>✅ Success</h3>
+            <p style="margin: 10px 0; font-size: 16px;"><?= htmlspecialchars($_SESSION['success']) ?></p>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
 
     <?php if (!$sessionId): ?>
         <!-- Import Page -->
