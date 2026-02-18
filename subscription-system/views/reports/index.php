@@ -114,6 +114,7 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
     $endDate = new DateTime('2031-03-31');
 
     // Get all invoices (including forecast invoices for future projections)
+    // Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization
     $invoices = $db->fetchAll("
         SELECT
             i.*,
@@ -121,8 +122,7 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
             le.termination_date as entity_termination_date
         FROM invoices i
         JOIN legal_entities le ON i.legal_entity_id = le.id
-        WHERE i.payment_frequency IN ('annual', 'quarterly')
-        AND i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
+        WHERE i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
         ORDER BY i.invoice_date
     ");
 
@@ -718,6 +718,7 @@ require __DIR__ . '/../layouts/header.php';
     $endDate = new DateTime('2031-03-31');
 
     // Get all invoices (including forecast invoices for future projections)
+    // Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization
     $invoices = $db->fetchAll("
         SELECT
             i.*,
@@ -725,8 +726,7 @@ require __DIR__ . '/../layouts/header.php';
             le.termination_date as entity_termination_date
         FROM invoices i
         JOIN legal_entities le ON i.legal_entity_id = le.id
-        WHERE i.payment_frequency IN ('annual', 'quarterly')
-        AND i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
+        WHERE i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
         ORDER BY i.invoice_date
     ");
 
@@ -804,7 +804,7 @@ require __DIR__ . '/../layouts/header.php';
         </div>
 
         <p style="margin-bottom: 20px; color: #666;">
-            Monthly revenue recognition based on prepayment amortization.
+            Monthly revenue recognition for all invoices. Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization.
             Showing next 3 years (36 months).
         </p>
 
