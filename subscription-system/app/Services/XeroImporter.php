@@ -200,16 +200,26 @@ class XeroImporter {
                 ['name' => $xeroCompanyName]
             );
             if (!$legalEntity) {
-                throw new \Exception("Legal Entity not found with Xero Company Name: {$xeroCompanyName}");
+                // Don't throw exception - just skip this row and log the error
+                $this->skipped++;
+                $this->errors[] = "Line {$lineNumber}: Legal Entity not found with Xero Company Name '{$xeroCompanyName}' - Invoice {$invoiceNumber} skipped";
+                return; // Skip this row but continue with the rest
             }
         } elseif (!empty($legalEntityId)) {
             // SECONDARY: Find by Legal Entity ID
             $legalEntity = $this->findLegalEntityById($legalEntityId, $legalEntityName);
+            if (!$legalEntity) {
+                $this->skipped++;
+                $this->errors[] = "Line {$lineNumber}: Legal Entity not found with ID '{$legalEntityId}' - Invoice {$invoiceNumber} skipped";
+                return;
+            }
         } elseif (!empty($contactName)) {
             // BACKWARD COMPATIBILITY: use contact name
             $legalEntity = $this->findOrCreateLegalEntity($contactName);
         } else {
-            throw new \Exception("Missing Xero Company Name, Legal Entity ID, or Contact Name");
+            $this->skipped++;
+            $this->errors[] = "Line {$lineNumber}: Missing Xero Company Name, Legal Entity ID, or Contact Name - Invoice {$invoiceNumber} skipped";
+            return;
         }
 
         // Create or update contract if rates are provided

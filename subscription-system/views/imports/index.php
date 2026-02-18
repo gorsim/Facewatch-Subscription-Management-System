@@ -67,7 +67,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
                 $success = $importer->import($targetPath);
 
                 if ($success) {
-                    $message = "Successfully imported {$importer->getImported()} invoices. Skipped {$importer->getSkipped()} duplicates.";
+                    $imported = $importer->getImported();
+                    $skipped = $importer->getSkipped();
+                    $importErrors = $importer->getErrors();
+
+                    if ($imported > 0) {
+                        $message = "✅ Successfully imported {$imported} invoice(s).";
+                        if ($skipped > 0) {
+                            $message .= " ⚠️ Skipped {$skipped} row(s) - see details below.";
+                        }
+                    } else {
+                        $message = "⚠️ No invoices were imported. All rows were skipped - see errors below.";
+                    }
+
+                    // Add any errors from skipped rows
+                    if (!empty($importErrors)) {
+                        $errors = array_merge($errors, $importErrors);
+                    }
                 } else {
                     $errors = $importer->getErrors();
                 }
@@ -91,13 +107,17 @@ require __DIR__ . '/../layouts/header.php';
 <?php endif; ?>
 
 <?php if (!empty($errors)): ?>
-    <div class="alert alert-error">
-        <strong>Import Errors:</strong>
-        <ul style="margin-top: 10px;">
+    <div class="alert alert-error" style="background: #f8d7da; border: 2px solid #f5c6cb; padding: 20px; margin-bottom: 20px; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #721c24;">⚠️ Import Errors (<?= count($errors) ?>)</h3>
+        <p style="margin-bottom: 10px;">The following rows could not be imported:</p>
+        <ul style="margin: 10px 0; max-height: 400px; overflow-y: auto; background: white; padding: 15px; border-radius: 3px;">
             <?php foreach ($errors as $error): ?>
-                <li><?= htmlspecialchars($error) ?></li>
+                <li style="margin: 5px 0; padding: 5px; border-bottom: 1px solid #f5c6cb;"><?= htmlspecialchars($error) ?></li>
             <?php endforeach; ?>
         </ul>
+        <p style="margin-top: 15px; font-weight: bold; color: #721c24;">
+            💡 Tip: Check that the "Xero Company Name" in your CSV exactly matches the "Xero Company Name" field in your Legal Entities.
+        </p>
     </div>
 <?php endif; ?>
 
