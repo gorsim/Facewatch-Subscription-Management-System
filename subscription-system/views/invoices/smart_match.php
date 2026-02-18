@@ -90,19 +90,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
         $imported = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
-            if (count($row) < 5) continue; // Skip invalid rows
+            // Skip empty rows
+            if (empty(array_filter($row))) continue;
 
             // Map CSV columns (adjust based on Xero export format)
             $data = array_combine($header, $row);
 
+            // Extract values with multiple possible column names
+            $invoiceNumber = $data['Invoice Number'] ?? $data['InvoiceNumber'] ?? $data['invoice_number'] ?? '';
+            $contactName = $data['Contact Name'] ?? $data['ContactName'] ?? $data['xero_company_name'] ?? $data['Company Name'] ?? '';
+            $invoiceDate = $data['Date'] ?? $data['InvoiceDate'] ?? $data['date'] ?? '';
+            $amountDue = $data['Amount Due'] ?? $data['Total'] ?? $data['amount_due'] ?? $data['Amount'] ?? 0;
+
+            // Skip if missing critical data
+            if (empty($invoiceNumber) || empty($contactName)) {
+                error_log("Smart Match: Skipping row - missing invoice number or contact name");
+                continue;
+            }
+
             $db->insert('xero_imported_invoices', [
                 'session_id' => $sessionId,
                 'xero_invoice_id' => $data['Invoice ID'] ?? $data['InvoiceID'] ?? '',
-                'xero_invoice_number' => $data['Invoice Number'] ?? $data['InvoiceNumber'] ?? '',
-                'contact_name' => $data['Contact Name'] ?? $data['ContactName'] ?? '',
-                'invoice_date' => $parseDate($data['Date'] ?? $data['InvoiceDate'] ?? ''),
+                'xero_invoice_number' => $invoiceNumber,
+                'contact_name' => $contactName,
+                'invoice_date' => $parseDate($invoiceDate),
                 'due_date' => isset($data['Due Date']) ? $parseDate($data['Due Date']) : null,
-                'amount' => floatval($data['Amount Due'] ?? $data['Total'] ?? 0),
+                'amount' => floatval($amountDue),
                 'status' => $data['Status'] ?? 'AUTHORISED'
             ]);
 
