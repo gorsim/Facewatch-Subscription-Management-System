@@ -128,6 +128,7 @@ require __DIR__ . '/../layouts/header.php';
         <a href="?page=import&type=subscribers" class="btn <?= $type === 'subscribers' ? 'btn-success' : '' ?>">Legal Entities</a>
         <a href="?page=import&type=stores" class="btn <?= $type === 'stores' ? 'btn-success' : '' ?>">Stores</a>
         <a href="?page=import&type=camera_installations" class="btn <?= $type === 'camera_installations' ? 'btn-success' : '' ?>">Camera Installations</a>
+        <a href="?page=import&type=xero" class="btn <?= $type === 'xero' ? 'btn-success' : '' ?>">Xero Invoices</a>
     </div>
 
     <?php if ($type === 'subscribers'): ?>
@@ -228,6 +229,16 @@ require __DIR__ . '/../layouts/header.php';
     <?php elseif ($type === 'xero'): ?>
         <h3>Import Xero Invoices</h3>
         <p>Upload a CSV file exported from Xero containing invoice data.</p>
+
+        <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #2196f3;">
+            <strong>🔍 Before Importing:</strong>
+            <a href="/subscription-system/public/check_xero_matches.php" target="_blank" style="color: #1976d2; text-decoration: underline;">
+                Check which CSV names will match your database
+            </a>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
+                This tool shows you which Contact Names from your CSV will successfully match Legal Entities in your database.
+            </p>
+        </div>
 
         <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <strong>Required CSV Columns:</strong>
