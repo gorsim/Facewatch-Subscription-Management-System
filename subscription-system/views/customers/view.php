@@ -19,6 +19,13 @@ if (!$legalEntityId) {
     exit;
 }
 
+// Clear any session pricing_type for this entity
+// This ensures the next edit starts fresh from the database value
+if (isset($_SESSION['edit_pricing_type_' . $legalEntityId])) {
+    unset($_SESSION['edit_pricing_type_' . $legalEntityId]);
+    error_log("Cleared session pricing_type for entity $legalEntityId on view page");
+}
+
 $legalEntityModel = new LegalEntity();
 $storeModel = new Store();
 $db = Database::getInstance();

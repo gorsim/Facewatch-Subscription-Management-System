@@ -263,9 +263,25 @@ require __DIR__ . '/../layouts/header.php';
 
             function confirmCancel() {
                 if (formModified) {
-                    return confirm('You have unsaved changes. Are you sure you want to leave without saving?');
+                    if (!confirm('You have unsaved changes. Are you sure you want to leave without saving?')) {
+                        return false;
+                    }
                 }
-                return true;
+
+                // Clear the session pricing_type when canceling
+                // This ensures the next edit starts fresh from the database value
+                fetch('?page=subscribers&action=save_pricing_type_session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'legal_entity_id=<?= $legalEntityId ?>&pricing_type=&clear=1'
+                }).then(() => {
+                    // Navigate after clearing session
+                    window.location.href = '?page=subscribers&action=view&id=<?= $legalEntityId ?>';
+                });
+
+                return false; // Prevent default navigation, we'll do it in the fetch callback
             }
             </script>
 
