@@ -509,52 +509,93 @@ require __DIR__ . '/../layouts/header.php';
                 Manage Allocations
             </a>
         </div>
+
+        <?php
+        // Group cameras by store and determine pricing tier (first vs additional)
+        $storeBreakdown = [];
+        $totalAllocated = 0;
+
+        foreach ($individualCameras as $camera) {
+            $storeId = $camera['store_id'];
+
+            if (!isset($storeBreakdown[$storeId])) {
+                $storeBreakdown[$storeId] = [
+                    'store_name' => $camera['store_name'],
+                    'store_code' => $camera['store_code'],
+                    'cameras' => []
+                ];
+            }
+
+            $storeBreakdown[$storeId]['cameras'][] = $camera;
+            $totalAllocated += $camera['price_charged'];
+        }
+
+        // For each store, determine which camera is "first" (highest price) and which are "additional"
+        foreach ($storeBreakdown as &$store) {
+            // Sort cameras by price descending to identify first camera
+            usort($store['cameras'], function($a, $b) {
+                return $b['price_charged'] <=> $a['price_charged'];
+            });
+
+            // Mark the first camera (highest price) as "First Camera"
+            // and the rest as "Additional Camera"
+            foreach ($store['cameras'] as $index => &$camera) {
+                $camera['pricing_tier'] = ($index === 0) ? 'First Camera' : 'Additional Camera';
+            }
+        }
+        ?>
+
         <table>
             <thead>
                 <tr>
                     <th>Store</th>
                     <th>Store ID</th>
-                    <th>Camera Type</th>
+                    <th>Pricing Tier</th>
                     <th>Installation Date</th>
                     <th>Price Charged</th>
                 </tr>
             </thead>
             <tbody>
-                <?php
-                $totalAllocated = 0;
-                foreach ($individualCameras as $camera):
-                    $totalAllocated += $camera['price_charged'];
-                ?>
-                <tr>
-                    <td><?= htmlspecialchars($camera['store_name']) ?></td>
-                    <td><?= htmlspecialchars($camera['store_code']) ?></td>
-                    <td>
-                        <?php if ($camera['camera_type']): ?>
-                            <span class="badge <?= $camera['camera_type'] === 'main' ? 'badge-primary' : 'badge-secondary' ?>">
-                                <?= ucfirst($camera['camera_type']) ?>
+                <?php foreach ($storeBreakdown as $store): ?>
+                    <?php foreach ($store['cameras'] as $index => $camera): ?>
+                    <tr <?= $index === 0 ? 'style="border-top: 2px solid #007bff;"' : '' ?>>
+                        <?php if ($index === 0): ?>
+                        <td rowspan="<?= count($store['cameras']) ?>" style="vertical-align: top; font-weight: bold; background: #f8f9fa;">
+                            <?= htmlspecialchars($store['store_name']) ?>
+                        </td>
+                        <td rowspan="<?= count($store['cameras']) ?>" style="vertical-align: top; background: #f8f9fa;">
+                            <?= htmlspecialchars($store['store_code']) ?>
+                        </td>
+                        <?php endif; ?>
+                        <td>
+                            <span class="badge <?= $camera['pricing_tier'] === 'First Camera' ? 'badge-success' : 'badge-info' ?>" style="font-size: 0.9em;">
+                                <?= $camera['pricing_tier'] ?>
                             </span>
-                        <?php else: ?>
-                            <em>N/A</em>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($camera['installation_date']): ?>
-                            <?= date('d/m/Y', strtotime($camera['installation_date'])) ?>
-                        <?php else: ?>
-                            <em>N/A</em>
-                        <?php endif; ?>
-                    </td>
-                    <td><strong>£<?= number_format($camera['price_charged'], 2) ?></strong></td>
-                </tr>
+                        </td>
+                        <td>
+                            <?php if ($camera['installation_date']): ?>
+                                <?= date('d/m/Y', strtotime($camera['installation_date'])) ?>
+                            <?php else: ?>
+                                <em>N/A</em>
+                            <?php endif; ?>
+                        </td>
+                        <td><strong>£<?= number_format($camera['price_charged'], 2) ?></strong></td>
+                    </tr>
+                    <?php endforeach; ?>
                 <?php endforeach; ?>
             </tbody>
             <tfoot>
                 <tr style="background: #f8f9fa; font-weight: bold;">
-                    <td colspan="5">TOTAL (<?= count($individualCameras) ?> cameras)</td>
+                    <td colspan="4">TOTAL (<?= count($individualCameras) ?> cameras)</td>
                     <td><strong>£<?= number_format($totalAllocated, 2) ?></strong></td>
                 </tr>
             </tfoot>
         </table>
+
+        <div style="margin-top: 15px; padding: 10px; background: #e7f3ff; border-left: 4px solid #007bff; border-radius: 4px;">
+            <strong>ℹ️ Pricing Explanation:</strong><br>
+            Each store's <strong>first camera</strong> is charged at the full rate. Any <strong>additional cameras</strong> in the same store receive a discounted rate.
+        </div>
     </div>
     <?php elseif (!empty($allocations)): ?>
     <!-- Legacy Camera Breakdown by Store -->
