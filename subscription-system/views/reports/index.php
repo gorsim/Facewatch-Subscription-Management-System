@@ -109,9 +109,26 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
     $db = Database::getInstance();
     $prepaymentCalc = new PrepaymentCalculator();
 
-    // Calculate date range: through to 31/3/31
-    $startDate = new DateTime('first day of this month');
+    // Get filter parameter
+    $filter = $_GET['filter'] ?? 'both';
+
+    // Calculate date range: previous 12 months through to 31/3/31
+    $startDate = new DateTime('first day of -12 months');
     $endDate = new DateTime('2031-03-31');
+
+    // Build WHERE clause based on filter
+    $whereConditions = [];
+    if ($filter === 'actuals') {
+        $whereConditions[] = "i.is_forecast = 0";
+        $whereConditions[] = "i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero')";
+    } elseif ($filter === 'forecasts') {
+        $whereConditions[] = "i.is_forecast = 1";
+        $whereConditions[] = "i.invoice_status = 'forecast'";
+    } else {
+        $whereConditions[] = "i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')";
+    }
+
+    $whereClause = implode(' AND ', $whereConditions);
 
     // Get all invoices (including forecast invoices for future projections)
     // Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization
@@ -122,7 +139,7 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
             le.termination_date as entity_termination_date
         FROM invoices i
         JOIN legal_entities le ON i.legal_entity_id = le.id
-        WHERE i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
+        WHERE $whereClause
         ORDER BY i.invoice_date
     ");
 
@@ -192,16 +209,53 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
         $currentMonth->modify('+1 month');
     }
 
+    // Determine filter label for filename
+    $filterLabel = $filter === 'actuals' ? 'actuals' : ($filter === 'forecasts' ? 'forecasts' : 'all');
+
     header('Content-Type: text/csv');
-    header('Content-Disposition: attachment; filename="revenue_forecast_' . date('Y-m-d') . '.csv"');
+    header('Content-Disposition: attachment; filename="revenue_forecast_' . $filterLabel . '_' . date('Y-m-d') . '.csv"');
 
     $output = fopen('php://output', 'w');
+
+    // Add filter info header
+    $filterText = $filter === 'actuals' ? 'Actuals Only' : ($filter === 'forecasts' ? 'Forecasts Only' : 'Both (Actuals + Forecasts)');
+    fputcsv($output, ['Revenue Report - ' . $filterText]);
+    fputcsv($output, ['Generated: ' . date('Y-m-d H:i:s')]);
+    fputcsv($output, []); // Blank row
 
     // CSV headers
     fputcsv($output, ['Month', 'Prepaid (Start)', 'Invoiced', 'Prepaid (End)', 'P&L Credit']);
 
-    // Data rows
-    foreach ($monthlyData as $data) {
+    // Data rows with separators
+    $currentMonthKey = (new DateTime())->format('Y-m');
+    $showingHistoric = true;
+    $totalHistoricPLCredit = 0;
+    $totalHistoricInvoiced = 0;
+    $totalFuturePLCredit = 0;
+    $totalFutureInvoiced = 0;
+
+    foreach ($monthlyData as $monthKey => $data) {
+        $isHistoric = $monthKey < $currentMonthKey;
+
+        // Track totals
+        if ($isHistoric) {
+            $totalHistoricPLCredit += $data['pl_credit'];
+            $totalHistoricInvoiced += $data['invoiced'];
+        } else {
+            $totalFuturePLCredit += $data['pl_credit'];
+            $totalFutureInvoiced += $data['invoiced'];
+        }
+
+        // Add separator before current month
+        if ($showingHistoric && !$isHistoric) {
+            $showingHistoric = false;
+            fputcsv($output, []); // Blank row
+            fputcsv($output, ['HISTORIC TOTAL (Last 12 Months)', '', number_format($totalHistoricInvoiced, 2), '', number_format($totalHistoricPLCredit, 2)]);
+            fputcsv($output, []); // Blank row
+            fputcsv($output, ['FORECAST (Current + Future Months)']);
+            fputcsv($output, ['Month', 'Prepaid (Start)', 'Invoiced', 'Prepaid (End)', 'P&L Credit']); // Re-add headers
+        }
+
         fputcsv($output, [
             $data['month'],
             number_format($data['prepaid_start'], 2),
@@ -210,6 +264,12 @@ if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv'
             number_format($data['pl_credit'], 2)
         ]);
     }
+
+    // Add totals footer
+    fputcsv($output, []); // Blank row
+    fputcsv($output, ['FORECAST TOTAL (Current + Future)', '', number_format($totalFutureInvoiced, 2), '', number_format($totalFuturePLCredit, 2)]);
+    fputcsv($output, []); // Blank row
+    fputcsv($output, ['GRAND TOTAL', '', number_format($totalHistoricInvoiced + $totalFutureInvoiced, 2), '', number_format($totalHistoricPLCredit + $totalFuturePLCredit, 2)]);
 
     fclose($output);
     exit;
@@ -713,9 +773,29 @@ require __DIR__ . '/../layouts/header.php';
     $db = Database::getInstance();
     $prepaymentCalc = new PrepaymentCalculator();
 
-    // Calculate date range: through to 31/3/31
-    $startDate = new DateTime('first day of this month');
+    // Get filter parameter (actuals, forecasts, or both)
+    $filter = $_GET['filter'] ?? 'both';
+
+    // Calculate date range: previous 12 months through to 31/3/31
+    $startDate = new DateTime('first day of -12 months');
     $endDate = new DateTime('2031-03-31');
+
+    // Build WHERE clause based on filter
+    $whereConditions = [];
+    if ($filter === 'actuals') {
+        // Only actual invoices (not forecasts)
+        $whereConditions[] = "i.is_forecast = 0";
+        $whereConditions[] = "i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero')";
+    } elseif ($filter === 'forecasts') {
+        // Only forecast invoices
+        $whereConditions[] = "i.is_forecast = 1";
+        $whereConditions[] = "i.invoice_status = 'forecast'";
+    } else {
+        // Both actuals and forecasts
+        $whereConditions[] = "i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')";
+    }
+
+    $whereClause = implode(' AND ', $whereConditions);
 
     // Get all invoices (including forecast invoices for future projections)
     // Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization
@@ -726,7 +806,7 @@ require __DIR__ . '/../layouts/header.php';
             le.termination_date as entity_termination_date
         FROM invoices i
         JOIN legal_entities le ON i.legal_entity_id = le.id
-        WHERE i.invoice_status IN ('draft', 'issued', 'reconciled_to_xero', 'forecast')
+        WHERE $whereClause
         ORDER BY i.invoice_date
     ");
 
@@ -800,13 +880,33 @@ require __DIR__ . '/../layouts/header.php';
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3>📈 P&L Credit Forecast (Revenue Recognition)</h3>
-            <a href="?page=reports&report=revenue&export=csv" class="btn btn-success">📥 Export to CSV</a>
+            <a href="?page=reports&report=revenue&filter=<?= $filter ?>&export=csv" class="btn btn-success">📥 Export to CSV</a>
         </div>
 
-        <p style="margin-bottom: 20px; color: #666;">
+        <p style="margin-bottom: 10px; color: #666;">
             Monthly revenue recognition for all invoices. Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization.
-            Showing period to March 2031.
+            Showing previous 12 months (historic) and forecast to March 2031.
         </p>
+
+        <!-- Filter Buttons -->
+        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+            <strong>Show:</strong>
+            <a href="?page=reports&report=revenue&filter=both"
+               class="btn <?= $filter === 'both' ? 'btn-success' : '' ?>"
+               style="<?= $filter === 'both' ? '' : 'background-color: #e9ecef; color: #495057;' ?>">
+                📊 Both (Actuals + Forecasts)
+            </a>
+            <a href="?page=reports&report=revenue&filter=actuals"
+               class="btn <?= $filter === 'actuals' ? 'btn-success' : '' ?>"
+               style="<?= $filter === 'actuals' ? '' : 'background-color: #e9ecef; color: #495057;' ?>">
+                ✅ Actuals Only
+            </a>
+            <a href="?page=reports&report=revenue&filter=forecasts"
+               class="btn <?= $filter === 'forecasts' ? 'btn-success' : '' ?>"
+               style="<?= $filter === 'forecasts' ? '' : 'background-color: #e9ecef; color: #495057;' ?>">
+                🔮 Forecasts Only
+            </a>
+        </div>
 
         <div style="overflow-x: auto;">
             <table>
@@ -823,12 +923,47 @@ require __DIR__ . '/../layouts/header.php';
                     <?php
                     $totalPLCredit = 0;
                     $totalInvoiced = 0;
-                    foreach ($monthlyData as $data):
+                    $totalHistoricPLCredit = 0;
+                    $totalHistoricInvoiced = 0;
+                    $totalFuturePLCredit = 0;
+                    $totalFutureInvoiced = 0;
+                    $currentMonthKey = (new DateTime())->format('Y-m');
+                    $showingHistoric = true;
+
+                    foreach ($monthlyData as $monthKey => $data):
                         $totalPLCredit += $data['pl_credit'];
                         $totalInvoiced += $data['invoiced'];
+
+                        // Determine if this is a historic or future month
+                        $isHistoric = $monthKey < $currentMonthKey;
+                        $isCurrentMonth = $monthKey === $currentMonthKey;
+
+                        if ($isHistoric) {
+                            $totalHistoricPLCredit += $data['pl_credit'];
+                            $totalHistoricInvoiced += $data['invoiced'];
+                        } else {
+                            $totalFuturePLCredit += $data['pl_credit'];
+                            $totalFutureInvoiced += $data['invoiced'];
+                        }
+
+                        // Add separator row before current month
+                        if ($showingHistoric && !$isHistoric):
+                            $showingHistoric = false;
                     ?>
-                    <tr>
-                        <td><strong><?= $data['month'] ?></strong></td>
+                    <tr style="background-color: #d4edda; font-weight: bold; border-top: 3px solid #28a745; border-bottom: 3px solid #28a745;">
+                        <td colspan="5" style="text-align: center; padding: 10px;">
+                            ⬆️ <strong>HISTORIC (Previous 12 Months)</strong> - Total P&L Credit: £<?= number_format($totalHistoricPLCredit, 2) ?> | Total Invoiced: £<?= number_format($totalHistoricInvoiced, 2) ?>
+                        </td>
+                    </tr>
+                    <tr style="background-color: #fff3cd; font-weight: bold; border-bottom: 3px solid #ffc107;">
+                        <td colspan="5" style="text-align: center; padding: 10px;">
+                            ⬇️ <strong>FORECAST (Current Month + Future)</strong>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+
+                    <tr style="<?= $isCurrentMonth ? 'background-color: #fff3cd; font-weight: bold;' : ($isHistoric ? 'background-color: #f8f9fa;' : '') ?>">
+                        <td><strong><?= $data['month'] ?></strong><?= $isCurrentMonth ? ' 📍' : '' ?></td>
                         <td>£<?= number_format($data['prepaid_start'], 2) ?></td>
                         <td><?= $data['invoiced'] > 0 ? '£' . number_format($data['invoiced'], 2) : '-' ?></td>
                         <td>£<?= number_format($data['prepaid_end'], 2) ?></td>
@@ -837,8 +972,22 @@ require __DIR__ . '/../layouts/header.php';
                     <?php endforeach; ?>
                 </tbody>
                 <tfoot>
-                    <tr style="background-color: #f8f9fa; font-weight: bold;">
-                        <td>Total</td>
+                    <tr style="background-color: #d4edda; font-weight: bold;">
+                        <td>📊 Historic Total (Last 12 Months)</td>
+                        <td>-</td>
+                        <td>£<?= number_format($totalHistoricInvoiced, 2) ?></td>
+                        <td>-</td>
+                        <td>£<?= number_format($totalHistoricPLCredit, 2) ?></td>
+                    </tr>
+                    <tr style="background-color: #fff3cd; font-weight: bold;">
+                        <td>🔮 Forecast Total (Current + Future)</td>
+                        <td>-</td>
+                        <td>£<?= number_format($totalFutureInvoiced, 2) ?></td>
+                        <td>-</td>
+                        <td>£<?= number_format($totalFuturePLCredit, 2) ?></td>
+                    </tr>
+                    <tr style="background-color: #e9ecef; font-weight: bold; border-top: 3px solid #495057;">
+                        <td>💰 Grand Total</td>
                         <td>-</td>
                         <td>£<?= number_format($totalInvoiced, 2) ?></td>
                         <td>-</td>
@@ -855,11 +1004,19 @@ require __DIR__ . '/../layouts/header.php';
                 <li><strong>Prepayments:</strong> Calculated using PrepaymentCalculator service</li>
                 <li><strong>Invoiced:</strong> New invoices issued during the month</li>
                 <li><strong>Terminations:</strong> Excludes months after entity termination date</li>
-                <li><strong>Time Range:</strong> Period to March 2031
+                <li><strong>Time Range:</strong> Previous 12 months (historic) + forecast to March 2031</li>
+                <li><strong>Filters:</strong>
+                    <ul style="margin-top: 5px;">
+                        <li><strong>Both:</strong> Shows all invoices (actuals + forecasts)</li>
+                        <li><strong>Actuals Only:</strong> Shows only draft, issued, and reconciled invoices (excludes forecasts)</li>
+                        <li><strong>Forecasts Only:</strong> Shows only forecast invoices (for future projections)</li>
+                    </ul>
+                </li>
             </ul>
             <p style="margin: 10px 0 0 0; font-size: 0.9em; color: #666;">
                 <strong>Note:</strong> This shows revenue recognition for accounting purposes,
                 not cash flow. See Cash Flow tab for expected payment timing.
+                Historic months (shaded gray) show actual revenue, while future months show forecasts.
             </p>
         </div>
     </div>
