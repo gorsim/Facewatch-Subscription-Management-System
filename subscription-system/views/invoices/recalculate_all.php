@@ -16,10 +16,13 @@ $autoGenService = new InvoiceAutoGenerationService();
 $results = $reconciliationService->reconcileAll();
 
 // Step 2: Generate missing forecast invoices
+// IMPORTANT: Only generate forecasts from "original" invoices, not converted forecasts
+// Converted forecasts have parent_invoice_id set, so we exclude them
 $invoices = $db->fetchAll("
     SELECT id, invoice_number
     FROM invoices
     WHERE (is_forecast = 0 OR is_forecast IS NULL)
+    AND parent_invoice_id IS NULL
     ORDER BY invoice_date DESC
 ");
 
