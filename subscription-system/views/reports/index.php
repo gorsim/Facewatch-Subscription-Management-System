@@ -805,7 +805,7 @@ require __DIR__ . '/../layouts/header.php';
 
         <p style="margin-bottom: 20px; color: #666;">
             Monthly revenue recognition for all invoices. Monthly invoices go straight to P&L, annual/quarterly use prepayment amortization.
-            Showing next 3 years (36 months).
+            Showing period to March 2031.
         </p>
 
         <div style="overflow-x: auto;">
