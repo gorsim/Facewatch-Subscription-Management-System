@@ -119,9 +119,8 @@ try {
 
             // Get camera details
             $camera = $db->fetchOne(
-                "SELECT ci.*, s.store_id
+                "SELECT ci.*
                  FROM camera_installations ci
-                 JOIN stores s ON ci.store_id = s.id
                  WHERE ci.id = :id",
                 ['id' => $cameraId]
             );
@@ -129,6 +128,8 @@ try {
             if (!$camera) {
                 throw new Exception("Camera $cameraId not found");
             }
+
+            error_log("Camera data for ID $cameraId: store_id=" . ($camera['store_id'] ?? 'NULL') . ", camera_type=" . ($camera['camera_type'] ?? 'NULL'));
 
             $db->insert('invoice_camera_allocations', [
                 'invoice_id' => $invoiceId,
