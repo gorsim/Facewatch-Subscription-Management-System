@@ -18,11 +18,11 @@ $pricingService = new PricingService();
 // Get parameters
 $legalEntityId = $_POST['legal_entity_id'] ?? null;
 $cameraCount = intval($_POST['camera_count'] ?? 0);
-$mainCameras = intval($_POST['main_cameras'] ?? 0);
+$firstCameras = intval($_POST['first_cameras'] ?? 0);
 $additionalCameras = intval($_POST['additional_cameras'] ?? 0);
 $invoiceDate = $_POST['invoice_date'] ?? date('Y-m-d'); // Use provided invoice date or default to today
 
-error_log("Parsed params - Entity: $legalEntityId, Count: $cameraCount, Main: $mainCameras, Additional: $additionalCameras, Invoice Date: $invoiceDate");
+error_log("Parsed params - Entity: $legalEntityId, Count: $cameraCount, First: $firstCameras, Additional: $additionalCameras, Invoice Date: $invoiceDate");
 
 // Validate input
 if (!$legalEntityId || $cameraCount <= 0) {
@@ -57,7 +57,7 @@ try {
 
     // Use the SELECTED camera count from the form, not the total active cameras
     // This ensures we price based on what the user selected for this invoice
-    error_log("Using selected camera count: $cameraCount (main: $mainCameras, additional: $additionalCameras)");
+    error_log("Using selected camera count: $cameraCount (first cameras: $firstCameras, additional: $additionalCameras)");
 
     // Get pricing based on SELECTED camera count and invoice date
     $pricing = $pricingService->getPricingForEntity(
@@ -69,7 +69,12 @@ try {
     // Calculate total amount based on pricing model
     if ($pricing['pricing_type'] === 'first_plus_additional') {
         // First camera + additional model
-        $amount = $pricing['total_cost'];
+        // Calculate based on actual first cameras (one per store) and additional cameras
+        $firstCameraRate = $pricing['first_camera_rate'];
+        $additionalCameraRate = $pricing['additional_camera_rate'];
+        $amount = ($firstCameras * $firstCameraRate) + ($additionalCameras * $additionalCameraRate);
+
+        error_log("Independent pricing calculation: $firstCameras first cameras @ £$firstCameraRate + $additionalCameras additional @ £$additionalCameraRate = £$amount");
     } else {
         // Volume-based model: rate per camera * camera count
         $amount = $pricing['rate_to_use'] * $cameraCount;
@@ -79,7 +84,7 @@ try {
         'success' => true,
         'amount' => round($amount, 2),
         'camera_count' => $cameraCount,
-        'main_cameras' => $mainCameras,
+        'first_cameras' => $firstCameras,
         'additional_cameras' => $additionalCameras,
         'pricing_model' => $pricing['pricing_type'],
         'rate_per_camera' => $pricing['rate_to_use'],

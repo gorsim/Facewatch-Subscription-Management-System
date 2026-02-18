@@ -294,20 +294,26 @@ function calculateAmount() {
     const firstCheckbox = selectedCheckboxes[0];
     const legalEntityId = firstCheckbox.dataset.legalEntityId;
 
-    // Count cameras by type
-    let mainCameras = 0;
-    let additionalCameras = 0;
-
+    // Group cameras by store to count first vs additional cameras per store
+    const storeGroups = {};
     selectedCheckboxes.forEach(checkbox => {
-        const cameraType = checkbox.dataset.cameraType;
-        if (cameraType === 'main') {
-            mainCameras++;
-        } else {
-            additionalCameras++;
+        const storeId = checkbox.closest('tr').querySelector('td:nth-child(3)').textContent.trim(); // Store name as key
+        if (!storeGroups[storeId]) {
+            storeGroups[storeId] = 0;
+        }
+        storeGroups[storeId]++;
+    });
+
+    // Count first cameras (one per store) and additional cameras (rest)
+    let firstCameras = Object.keys(storeGroups).length; // One first camera per store
+    let additionalCameras = 0;
+    Object.values(storeGroups).forEach(count => {
+        if (count > 1) {
+            additionalCameras += (count - 1); // All cameras after the first in each store
         }
     });
 
-    const totalCameras = mainCameras + additionalCameras;
+    const totalCameras = firstCameras + additionalCameras;
 
     // Get the invoice date from the form
     const invoiceDate = document.getElementById('invoiceDate').value || new Date().toISOString().split('T')[0];
@@ -318,7 +324,7 @@ function calculateAmount() {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `legal_entity_id=${legalEntityId}&camera_count=${totalCameras}&main_cameras=${mainCameras}&additional_cameras=${additionalCameras}&invoice_date=${invoiceDate}`
+        body: `legal_entity_id=${legalEntityId}&camera_count=${totalCameras}&first_cameras=${firstCameras}&additional_cameras=${additionalCameras}&invoice_date=${invoiceDate}`
     })
     .then(response => response.json())
     .then(data => {
