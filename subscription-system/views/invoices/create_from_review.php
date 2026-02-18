@@ -16,6 +16,7 @@ $pricingTiers = $_POST['pricing_tiers'] ?? [];
 $invoiceDate = $_POST['invoice_date'] ?? null;
 $legalEntityId = $_POST['legal_entity_id'] ?? null;
 $targetAmount = $_POST['target_amount'] ?? null;
+$invoiceNotes = $_POST['invoice_notes'] ?? null;
 
 error_log("create_from_review.php - Full POST data: " . print_r($_POST, true));
 error_log("create_from_review.php - Camera IDs count: " . count($cameraIds));
@@ -107,7 +108,8 @@ try {
             'invoice_amount' => $invoiceAmount,
             'invoice_status' => 'draft',
             'payment_frequency' => $paymentFrequency,
-            'is_auto_generated' => 0
+            'is_auto_generated' => 0,
+            'notes' => !empty($invoiceNotes) ? $invoiceNotes : null
         ]);
 
         error_log("Created invoice $invoiceNumber (ID: $invoiceId) with amount £$invoiceAmount");

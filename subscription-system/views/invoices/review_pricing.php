@@ -18,6 +18,7 @@ $pricingService = new PricingService();
 $cameraIds = $_POST['cameras'] ?? [];
 $invoiceDate = $_POST['invoice_date'] ?? null;
 $overrideAmount = !empty($_POST['override_amount']) ? floatval($_POST['override_amount']) : null;
+$invoiceNotes = $_POST['invoice_notes'] ?? '';
 
 // Validate input
 if (empty($cameraIds)) {
@@ -190,6 +191,7 @@ require __DIR__ . '/../layouts/header.php';
         <input type="hidden" name="invoice_date" value="<?= htmlspecialchars($invoiceDate) ?>">
         <input type="hidden" name="legal_entity_id" value="<?= $legalEntityId ?>">
         <input type="hidden" name="target_amount" value="<?= $targetAmount ?>">
+        <input type="hidden" name="invoice_notes" value="<?= htmlspecialchars($invoiceNotes) ?>">
 
         <div class="card">
             <h3>Camera Pricing</h3>

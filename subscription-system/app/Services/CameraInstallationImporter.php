@@ -111,6 +111,14 @@ class CameraInstallationImporter {
             elseif ($header === 'camera_type' || $header === 'camera type' || $header === 'type') {
                 $map['camera_type'] = $index;
             }
+            // Camera Name
+            elseif ($header === 'camera_name' || $header === 'camera name' || $header === 'name') {
+                $map['camera_name'] = $index;
+            }
+            // SAFR Code
+            elseif ($header === 'safr_code' || $header === 'safr code' || $header === 'safr') {
+                $map['safr_code'] = $index;
+            }
             // Invoice Number
             elseif ($header === 'invoice_number' || $header === 'invoice number' || $header === 'invoice') {
                 $map['invoice_number'] = $index;
@@ -184,16 +192,23 @@ class CameraInstallationImporter {
             }
         }
         
+        // Extract optional fields
+        $cameraName = isset($columnMap['camera_name']) ? trim($row[$columnMap['camera_name']] ?? '') : null;
+        $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : null;
+        $notes = isset($columnMap['notes']) ? trim($row[$columnMap['notes']] ?? '') : null;
+
         // Create camera installation
         $this->cameraInstallation->create([
             'store_id' => $store['id'],
             'installation_date' => $installationDate,
             'removal_date' => $removalDate,
             'camera_type' => $cameraType,
+            'camera_name' => !empty($cameraName) ? $cameraName : null,
+            'safr_code' => !empty($safrCode) ? $safrCode : null,
             'invoice_id' => $invoiceId,
-            'notes' => isset($columnMap['notes']) ? ($row[$columnMap['notes']] ?? null) : null,
+            'notes' => !empty($notes) ? $notes : null,
         ]);
-        
+
         $this->imported++;
     }
     

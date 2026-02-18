@@ -187,6 +187,8 @@ require __DIR__ . '/../layouts/header.php';
             </ul>
             <strong>Optional Columns:</strong>
             <ul style="margin-top: 10px;">
+                <li><strong>Camera Name</strong> - Friendly name for the camera (e.g., "Front Entrance", "Checkout Area")</li>
+                <li><strong>SAFR Code</strong> - SAFR system code for the camera</li>
                 <li>Store Name (for reference only)</li>
                 <li>Invoice Number (links to invoice)</li>
                 <li>Removal Date (if camera was removed)</li>

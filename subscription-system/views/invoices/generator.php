@@ -239,6 +239,14 @@ require __DIR__ . '/../layouts/header.php';
                     </div>
                 </div>
 
+                <div style="margin-top: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Invoice Notes (optional):</label>
+                    <textarea name="invoice_notes"
+                              rows="3"
+                              placeholder="Add any internal notes about this invoice..."
+                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;"></textarea>
+                </div>
+
                 <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
                     <p style="margin: 0; font-weight: bold;">⚠️ Important:</p>
                     <ul style="margin: 10px 0 0 20px;">
