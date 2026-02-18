@@ -96,41 +96,48 @@ try {
     }
     $totalCameras = count($cameras);
 
-    // Get TOTAL active cameras for this legal entity to determine pricing tier
-    $totalActiveCameras = $db->fetchOne(
-        "SELECT COUNT(*) as total
-         FROM camera_installations ci
-         JOIN stores s ON ci.store_id = s.id
-         WHERE s.legal_entity_id = :legal_entity_id
-         AND ci.installation_date <= :as_of_date
-         AND (ci.removal_date IS NULL OR ci.removal_date > :as_of_date2)",
-        [
-            'legal_entity_id' => $legalEntityId,
-            'as_of_date' => $invoiceDate,
-            'as_of_date2' => $invoiceDate
-        ]
-    );
+    // Group cameras by store to count first cameras (one per store) vs additional cameras
+    $camerasByStore = [];
+    foreach ($cameras as $camera) {
+        $storeId = $camera['store_id'];
+        if (!isset($camerasByStore[$storeId])) {
+            $camerasByStore[$storeId] = [];
+        }
+        $camerasByStore[$storeId][] = $camera;
+    }
 
-    $totalCameraCount = intval($totalActiveCameras['total'] ?? 0);
+    // Count first cameras (one per store) and additional cameras
+    $firstCameras = count($camerasByStore); // One first camera per store
+    $additionalCameras = $totalCameras - $firstCameras; // Remaining cameras are additional
+
+    error_log("create_from_generator.php - Selected cameras: $totalCameras (first: $firstCameras, additional: $additionalCameras)");
 
     // Calculate invoice amount if not overridden
     if ($overrideAmount !== null) {
         $invoiceAmount = $overrideAmount;
     } else {
-        // Get pricing from PricingService based on TOTAL camera count (for tier)
+        // Get pricing from PricingService based on SELECTED camera count (not total active)
+        // This matches the preview calculation in calculate_pricing.php
         $pricing = $pricingService->getPricingForEntity(
             $legalEntityId,
-            $totalCameraCount,
+            $totalCameras,  // Use selected camera count
             $invoiceDate
         );
 
         // Calculate total amount based on pricing model
         if ($pricing['pricing_type'] === 'first_plus_additional') {
             // First camera + additional model
-            $invoiceAmount = $pricing['total_cost'];
+            // Calculate based on actual first cameras (one per store) and additional cameras
+            $firstCameraRate = $pricing['first_camera_rate'];
+            $additionalCameraRate = $pricing['additional_camera_rate'];
+            $invoiceAmount = ($firstCameras * $firstCameraRate) + ($additionalCameras * $additionalCameraRate);
+
+            error_log("create_from_generator.php - Independent pricing: $firstCameras × £$firstCameraRate + $additionalCameras × £$additionalCameraRate = £$invoiceAmount");
         } else {
             // Volume-based model: rate per camera * camera count
             $invoiceAmount = $pricing['rate_to_use'] * $totalCameras;
+
+            error_log("create_from_generator.php - Volume pricing: $totalCameras × £{$pricing['rate_to_use']} = £$invoiceAmount");
         }
 
         // Round to 2 decimal places
