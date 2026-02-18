@@ -57,12 +57,12 @@ try {
 
     // Use the SELECTED camera count from the form, not the total active cameras
     // This ensures we price based on what the user selected for this invoice
-    error_log("Using selected camera count: $totalCameras (main: $mainCameras, additional: $additionalCameras)");
+    error_log("Using selected camera count: $cameraCount (main: $mainCameras, additional: $additionalCameras)");
 
     // Get pricing based on SELECTED camera count and invoice date
     $pricing = $pricingService->getPricingForEntity(
         $legalEntityId,
-        $totalCameras,
+        $cameraCount,
         $invoiceDate
     );
     
@@ -72,13 +72,13 @@ try {
         $amount = $pricing['total_cost'];
     } else {
         // Volume-based model: rate per camera * camera count
-        $amount = $pricing['rate_to_use'] * $totalCameras;
+        $amount = $pricing['rate_to_use'] * $cameraCount;
     }
 
     $response = [
         'success' => true,
         'amount' => round($amount, 2),
-        'camera_count' => $totalCameras,
+        'camera_count' => $cameraCount,
         'main_cameras' => $mainCameras,
         'additional_cameras' => $additionalCameras,
         'pricing_model' => $pricing['pricing_type'],
