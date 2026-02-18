@@ -30,9 +30,15 @@ foreach ($entities as $entity) {
 // Handle CSV upload
 $csvNames = [];
 $uploadError = '';
+$debugInfo = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
-    $file = $_FILES['csv_file'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $debugInfo[] = 'POST request received';
+
+    if (isset($_FILES['csv_file'])) {
+        $debugInfo[] = 'File upload detected';
+        $file = $_FILES['csv_file'];
+        $debugInfo[] = 'File error code: ' . $file['error'];
 
     if ($file['error'] === UPLOAD_ERR_OK) {
         $handle = fopen($file['tmp_name'], 'r');
@@ -68,10 +74,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             }
 
             fclose($handle);
+        } else {
+            $uploadError = 'Could not open uploaded file';
         }
     } else {
-        $uploadError = 'File upload failed';
+        $uploadError = 'File upload failed with error code: ' . $file['error'];
     }
+} else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $uploadError = 'No file was uploaded';
 }
 
 ?>
@@ -115,6 +125,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
 
         <div class="card">
             <h2>📤 Upload Your Xero CSV</h2>
+
+            <?php if (!empty($uploadError)): ?>
+                <div class="alert-error">
+                    <strong>⚠️ Upload Error:</strong> <?= htmlspecialchars($uploadError) ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($debugInfo)): ?>
+                <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px;">
+                    <strong>Debug Info:</strong><br>
+                    <?php foreach ($debugInfo as $info): ?>
+                        • <?= htmlspecialchars($info) ?><br>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
             <div class="upload-box">
                 <form method="POST" enctype="multipart/form-data">
                     <input type="file" name="csv_file" accept=".csv" required style="margin-bottom: 10px;">
