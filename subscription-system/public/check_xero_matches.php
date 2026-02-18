@@ -41,12 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $debugInfo[] = 'File error code: ' . $file['error'];
 
     if ($file['error'] === UPLOAD_ERR_OK) {
+        $debugInfo[] = 'File uploaded successfully, opening file...';
         $handle = fopen($file['tmp_name'], 'r');
 
         if ($handle) {
+            $debugInfo[] = 'File opened successfully';
             // Read header
             $header = fgetcsv($handle);
             if ($header) {
+                $debugInfo[] = 'Header row read: ' . implode(', ', $header);
                 // Find Contact Name column (case-insensitive)
                 $headerLower = array_map('strtolower', array_map('trim', $header));
                 $contactNameIndex = false;
@@ -54,13 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 foreach ($headerLower as $index => $col) {
                     if (in_array($col, ['contact name', 'contact_name', 'xero company name', 'xero_company_name'])) {
                         $contactNameIndex = $index;
+                        $debugInfo[] = 'Found Contact Name column at index ' . $index . ' (column: ' . $header[$index] . ')';
                         break;
                     }
                 }
 
                 if ($contactNameIndex !== false) {
                     // Read all rows and extract contact names
+                    $rowCount = 0;
                     while (($row = fgetcsv($handle)) !== false) {
+                        $rowCount++;
                         if (isset($row[$contactNameIndex]) && !empty(trim($row[$contactNameIndex]))) {
                             $csvNames[] = trim($row[$contactNameIndex]);
                         }
@@ -68,9 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $csvNames = array_unique($csvNames);
                     sort($csvNames);
+                    $debugInfo[] = 'Processed ' . $rowCount . ' data rows, found ' . count($csvNames) . ' unique Contact Names';
                 } else {
-                    $uploadError = 'Could not find "Contact Name" or "Xero Company Name" column in CSV';
+                    $uploadError = 'Could not find "Contact Name" or "Xero Company Name" column in CSV. Found columns: ' . implode(', ', $header);
                 }
+            } else {
+                $uploadError = 'Could not read header row from CSV';
             }
 
             fclose($handle);
