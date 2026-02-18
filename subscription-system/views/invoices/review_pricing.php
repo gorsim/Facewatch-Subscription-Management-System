@@ -303,9 +303,13 @@ document.querySelectorAll('.camera-price-input').forEach(input => {
 
 // Form validation
 document.getElementById('reviewForm').addEventListener('submit', function(e) {
+    console.log('Form submit triggered');
+
     const total = calculateTotal();
     const targetAmount = <?= $targetAmount ?>;
     const variance = Math.abs(total - targetAmount);
+
+    console.log('Total:', total, 'Target:', targetAmount, 'Variance:', variance);
 
     if (variance > 0.01) {
         const confirmed = confirm(
@@ -315,10 +319,14 @@ document.getElementById('reviewForm').addEventListener('submit', function(e) {
         );
 
         if (!confirmed) {
+            console.log('User cancelled submission');
             e.preventDefault();
             return false;
         }
     }
+
+    console.log('Form submitting...');
+    return true;
 });
 </script>
 

@@ -17,25 +17,31 @@ $invoiceDate = $_POST['invoice_date'] ?? null;
 $legalEntityId = $_POST['legal_entity_id'] ?? null;
 $targetAmount = $_POST['target_amount'] ?? null;
 
-error_log("create_from_review.php - Camera IDs: " . print_r($cameraIds, true));
-error_log("create_from_review.php - Camera Prices: " . print_r($cameraPrices, true));
+error_log("create_from_review.php - Full POST data: " . print_r($_POST, true));
+error_log("create_from_review.php - Camera IDs count: " . count($cameraIds));
+error_log("create_from_review.php - Camera Prices count: " . count($cameraPrices));
+error_log("create_from_review.php - Pricing Tiers count: " . count($pricingTiers));
 error_log("create_from_review.php - Invoice Date: " . $invoiceDate);
+error_log("create_from_review.php - Legal Entity ID: " . $legalEntityId);
 
 // Validate input
 if (empty($cameraIds) || empty($cameraPrices)) {
+    error_log("create_from_review.php - Validation failed: No cameras or prices");
     $_SESSION['error'] = 'No cameras or prices provided';
     header('Location: ?page=invoices&action=generator');
     exit;
 }
 
 if (!$invoiceDate || !$legalEntityId) {
+    error_log("create_from_review.php - Validation failed: Missing date or entity");
     $_SESSION['error'] = 'Invoice date and legal entity are required';
     header('Location: ?page=invoices&action=generator');
     exit;
 }
 
 if (count($cameraIds) !== count($cameraPrices) || count($cameraIds) !== count($pricingTiers)) {
-    $_SESSION['error'] = 'Mismatch between cameras, prices, and tiers';
+    error_log("create_from_review.php - Validation failed: Array count mismatch - IDs: " . count($cameraIds) . ", Prices: " . count($cameraPrices) . ", Tiers: " . count($pricingTiers));
+    $_SESSION['error'] = 'Mismatch between cameras, prices, and tiers. Please try again.';
     header('Location: ?page=invoices&action=generator');
     exit;
 }
