@@ -67,6 +67,17 @@ $needsRecalculate = ($missingForecasts > 0 || $outOfSyncForecasts > 0 || $outOfS
 
 } // End of else block for checks
 
+// Check for forecast invoices due for conversion
+$dueForecasts = $db->fetchOne("
+    SELECT COUNT(*) as count
+    FROM invoices i
+    JOIN legal_entities le ON i.legal_entity_id = le.id
+    WHERE i.next_generation_date <= CURDATE()
+    AND i.is_forecast = 1
+    AND i.invoice_status = 'forecast'
+    AND le.termination_date IS NULL
+")['count'] ?? 0;
+
 $filter = $_GET['filter'] ?? 'all';
 $statusFilter = $_GET['status'] ?? 'all';
 $search = $_GET['search'] ?? '';
@@ -185,6 +196,15 @@ require __DIR__ . '/../layouts/header.php';
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>Invoices (<?= count($invoices) ?>)</h2>
         <div style="display: flex; gap: 10px;">
+            <?php if ($dueForecasts > 0): ?>
+            <a href="convert_forecasts.php" class="btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; animation: pulse 2s infinite;">
+                🔄 Convert <?= $dueForecasts ?> Due Forecast<?= $dueForecasts != 1 ? 's' : '' ?>
+            </a>
+            <?php else: ?>
+            <a href="convert_forecasts.php" class="btn" style="background: #6c757d; color: white; border: none;">
+                🔄 Convert Forecasts
+            </a>
+            <?php endif; ?>
             <a href="?page=invoices&action=smart_match" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
                 🤖 Smart Match Invoices
             </a>

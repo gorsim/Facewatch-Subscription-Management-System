@@ -45,6 +45,10 @@
         .badge-secondary { background: #e2e3e5; color: #383d41; }
         .badge-forecast { background: #e3f2fd; color: #1976d2; border: 1px solid #90caf9; }
         .btn-sm { padding: 6px 12px; font-size: 14px; }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+        }
     </style>
 </head>
 <body>
