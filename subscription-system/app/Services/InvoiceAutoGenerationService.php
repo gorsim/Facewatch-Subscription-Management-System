@@ -180,14 +180,16 @@ class InvoiceAutoGenerationService {
      *
      * IMPORTANT: Converted forecasts should NOT generate new forecasts!
      * They are standalone invoices, not the start of a new chain.
+     * We KEEP parent_invoice_id set so the recalculate process knows to skip them.
      */
     private function convertForecastToActual($forecastInvoice) {
         // Update the forecast invoice to make it an actual invoice
+        // KEEP parent_invoice_id - this marks it as a converted forecast
         $this->db->update('invoices', [
             'invoice_status' => 'draft',
             'is_forecast' => 0,
             'forecast_year' => null,
-            'parent_invoice_id' => null,  // Clear parent - this is now a standalone invoice
+            // DO NOT clear parent_invoice_id - we need it to identify converted forecasts
             'generation_date' => date('Y-m-d H:i:s'),
             'created_by' => 'auto_generation_system'
         ], 'id = :id', ['id' => $forecastInvoice['id']]);
