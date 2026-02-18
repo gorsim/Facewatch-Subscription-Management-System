@@ -25,6 +25,7 @@ $uninvoicedCameras = $db->fetchAll(
         ci.id as camera_id,
         ci.installation_date,
         ci.camera_name,
+        ci.safr_code,
         ci.camera_type,
         ci.store_id,
         s.store_name,
