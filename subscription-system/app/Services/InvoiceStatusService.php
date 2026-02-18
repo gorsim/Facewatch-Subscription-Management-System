@@ -191,7 +191,6 @@ class InvoiceStatusService {
                 'invoice_status' => 'reconciled_to_xero',
                 'xero_invoice_id' => $xeroInvoiceId,
                 'xero_invoice_number' => $xeroInvoiceNumber,
-                'xero_invoice_amount' => $xeroInvoiceAmount,
                 'reconciled_date' => date('Y-m-d'),
                 'reconciled_by' => $reconciledBy
             ], 'id = :id', ['id' => $invoiceId]);
