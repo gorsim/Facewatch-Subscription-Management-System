@@ -126,7 +126,7 @@ require __DIR__ . '/../layouts/header.php';
         </div>
     <?php else: ?>
         <!-- Camera Selection Form -->
-        <form method="POST" action="?page=invoices&action=create_from_generator" id="generatorForm">
+        <form method="POST" action="?page=invoices&action=review_pricing" id="generatorForm">
             <input type="hidden" name="cutoff_date" value="<?= htmlspecialchars($cutoffDate) ?>">
 
             <div class="card">
@@ -246,12 +246,13 @@ require __DIR__ . '/../layouts/header.php';
                         <li>Invoice number will be auto-generated</li>
                         <li>Amount is calculated based on pricing table</li>
                         <li>You can override the amount if needed</li>
+                        <li><strong>Next step:</strong> Review and adjust individual camera prices before creating the invoice</li>
                     </ul>
                 </div>
 
                 <div style="margin-top: 20px; text-align: right;">
                     <button type="submit" class="btn btn-success" style="font-size: 1.1em; padding: 12px 30px;">
-                        📄 Create Invoice
+                        📝 Review & Create Invoice →
                     </button>
                 </div>
             </div>

@@ -84,7 +84,7 @@ try {
             break;
 
         case 'invoices':
-            $validActions = ['create', 'delete', 'view', 'allocate', 'debug_allocations', 'cleanup_duplicates', 'reset_all', 'change_status', 'reconcile_to_xero', 'bulk_reconcile', 'bulk_status_update', 'test_view', 'reconcile_form', 'smart_match', 'match_action', 'manual_match', 'cluster', 'delete_xero_invoice', 'generator', 'create_from_generator', 'calculate_pricing', 'update_dates', 'regenerate_forecasts', 'recalculate_all'];
+            $validActions = ['create', 'delete', 'view', 'allocate', 'debug_allocations', 'cleanup_duplicates', 'reset_all', 'change_status', 'reconcile_to_xero', 'bulk_reconcile', 'bulk_status_update', 'test_view', 'reconcile_form', 'smart_match', 'match_action', 'manual_match', 'cluster', 'delete_xero_invoice', 'generator', 'create_from_generator', 'calculate_pricing', 'update_dates', 'regenerate_forecasts', 'recalculate_all', 'review_pricing', 'create_from_review'];
 
             error_log("index.php invoices case - Action: $action, Valid: " . (in_array($action, $validActions) ? 'YES' : 'NO'));
             if (in_array($action, $validActions)) {
