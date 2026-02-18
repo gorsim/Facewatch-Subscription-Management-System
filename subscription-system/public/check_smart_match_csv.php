@@ -2,9 +2,8 @@
 /**
  * Diagnostic Tool: Check Smart Match CSV Format
  * Shows what columns are in your CSV and what the system expects
+ * Standalone version - no dependencies needed
  */
-
-require_once __DIR__ . '/../config/config.php';
 
 $debugInfo = [];
 $csvData = null;
