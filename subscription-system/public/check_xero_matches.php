@@ -1,7 +1,7 @@
 <?php
 /**
- * Diagnostic Tool: Check Xero Company Name Matches
- * Shows which names from your CSV match the database
+ * Diagnostic Tool: Check Xero CSV Matches
+ * Upload your CSV to see which Contact Names will match Legal Entities
  */
 
 require_once __DIR__ . '/../app/Database.php';
@@ -12,7 +12,7 @@ $db = Database::getInstance();
 
 // Get all legal entities with Xero Company Names
 $entities = $db->fetchAll("
-    SELECT 
+    SELECT
         id,
         legal_entity_name,
         xero_company_name
@@ -21,153 +21,197 @@ $entities = $db->fetchAll("
     ORDER BY xero_company_name
 ");
 
-// Names from your CSV
-$csvNames = [
-    'Eat 17',
-    'Brookside Supermarket',
-    'James Hall and Company Ltd',
-    'Stanshawe Service Station (Yate) Ltd',
-    'Brookfield Retail Ltd',
-    'Shelley News Ltd',
-    'Robertshaws Farm Shop Ltd',
-    'Lightfoots (Est 1897) Ltd',
-    'Thompson News \'N\' Food Ltd',
-    'Fresh & Local Forecourts Limited',
-    'William Strike Limited',
-    'Haskins Garden Centres Ltd',
-    'St Peters Garden Centre',
-    'Mole Avon Country Stores',
-    'Otter Garden Centres',
-    'ADES Limited',
-    'Skechers USA Ltd',
-    'F & A Convenience',
-    'Davids Kitchen',
-    'Fron Goch Garden Centre',
-    'Millets Farm Centre Limited',
-    'Stevenson of Oxbridge',
-    'Jempsons Supermarkets Ltd',
-    'TYS Retail Ltd',
-    'Forfar Road Service Station',
-    'Brand Academy Store',
-    'Thurrock Garden Centre Ltd',
-    'SPAR Greaves Road',
-    'TAP Retail Limited',
-    'Aes Glasgow Limited T/A One Stop Dumbarton Road',
-    'Hobbycraft Trading Limited',
-    'SRJ Convenience Ltd',
-    'BestOne Convenience',
-    'Gosnays Retail',
-    'Bassett Holdings Limited',
-    'Qubros Ltd',
-    'James Convenience Retail Ltd',
-    'Elara Foods Ltd',
-    'Yorkshire Garden Centres',
-    'Brocksbushes Farm Shop',
-    'Millbrook Garden Centres',
-    'M&L Richardson & Sons Ltd',
-    'Coolings Nurseries Ltd',
-    'Keshco Ltd',
-    'Gill Marsh',
-    'SRJ Energy Ltd',
-    'Messrs Mcilwrath & Lowe t/a Bargain Booze',
-    'The Fertility Foundation',
-    'Myuran Limited',
-    'Webbs Garden Centre',
-    'Hylands Group Limited',
-    'Kavanaghs Group',
-    'HKS Retail Ltd',
-    'Gilletts Callington Ltd',
-    'Whitehall Garden Centres',
-    'RJ Raven Ltd',
-    'Brobot Petroleum Ltd',
-    'Clapham Wholefoods Limited',
-    'Budgens Burnham',
-    'Jaykishan Lostock Hall Limited',
-    'Blacks Wine Ltd',
-    'Pricewatch Group',
-    'AF Blakemore',
-    'Electra Shop Ltd t/a Londis Westham Road',
-    'Village Market Trading Ltd',
-    'Philanthropy London CIC',
-    'Henderson Retail Ltd'
-];
-
-$csvNames = array_unique($csvNames);
-sort($csvNames);
-
-// Create lookup map
+// Create lookup map (case-insensitive)
 $dbMap = [];
 foreach ($entities as $entity) {
     $dbMap[strtolower($entity['xero_company_name'])] = $entity;
+}
+
+// Handle CSV upload
+$csvNames = [];
+$uploadError = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
+    $file = $_FILES['csv_file'];
+
+    if ($file['error'] === UPLOAD_ERR_OK) {
+        $handle = fopen($file['tmp_name'], 'r');
+
+        if ($handle) {
+            // Read header
+            $header = fgetcsv($handle);
+            if ($header) {
+                // Find Contact Name column (case-insensitive)
+                $headerLower = array_map('strtolower', array_map('trim', $header));
+                $contactNameIndex = false;
+
+                foreach ($headerLower as $index => $col) {
+                    if (in_array($col, ['contact name', 'contact_name', 'xero company name', 'xero_company_name'])) {
+                        $contactNameIndex = $index;
+                        break;
+                    }
+                }
+
+                if ($contactNameIndex !== false) {
+                    // Read all rows and extract contact names
+                    while (($row = fgetcsv($handle)) !== false) {
+                        if (isset($row[$contactNameIndex]) && !empty(trim($row[$contactNameIndex]))) {
+                            $csvNames[] = trim($row[$contactNameIndex]);
+                        }
+                    }
+
+                    $csvNames = array_unique($csvNames);
+                    sort($csvNames);
+                } else {
+                    $uploadError = 'Could not find "Contact Name" or "Xero Company Name" column in CSV';
+                }
+            }
+
+            fclose($handle);
+        }
+    } else {
+        $uploadError = 'File upload failed';
+    }
 }
 
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Xero Company Name Match Check</title>
+    <title>Xero CSV Match Checker</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .match { background: #d4edda; padding: 5px; margin: 2px 0; }
-        .no-match { background: #f8d7da; padding: 5px; margin: 2px 0; }
-        .section { margin: 20px 0; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f8f9fa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .match { background: #d4edda; padding: 8px; margin: 3px 0; border-radius: 4px; border-left: 4px solid #28a745; }
+        .no-match { background: #f8d7da; padding: 8px; margin: 3px 0; border-radius: 4px; border-left: 4px solid #dc3545; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:hover { background: #f8f9fa; }
+        .btn { display: inline-block; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }
+        .btn:hover { background: #2980b9; }
+        .upload-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .alert-error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #f5c6cb; }
+        .summary-box { background: #e3f2fd; padding: 20px; border-radius: 8px; border-left: 4px solid #2196f3; }
+        .summary-box h3 { margin-bottom: 10px; }
+        .summary-stat { font-size: 1.2em; margin: 5px 0; }
     </style>
 </head>
 <body>
-    <h1>🔍 Xero Company Name Match Diagnostic</h1>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Xero CSV Match Checker</h1>
+            <p style="margin-top: 10px; opacity: 0.9;">Upload your Xero CSV to see which Contact Names will match your Legal Entities</p>
+        </div>
 
-    <div class="section">
-        <h2>Database: Legal Entities with Xero Company Names (<?= count($entities) ?>)</h2>
-        <table>
-            <tr>
-                <th>Legal Entity Name</th>
-                <th>Xero Company Name</th>
-            </tr>
-            <?php foreach ($entities as $entity): ?>
-                <tr>
-                    <td><?= htmlspecialchars($entity['legal_entity_name']) ?></td>
-                    <td><strong><?= htmlspecialchars($entity['xero_company_name']) ?></strong></td>
-                </tr>
-            <?php endforeach; ?>
-        </table>
-    </div>
+        <?php if ($uploadError): ?>
+            <div class="alert-error">
+                <strong>❌ Error:</strong> <?= htmlspecialchars($uploadError) ?>
+            </div>
+        <?php endif; ?>
 
-    <div class="section">
-        <h2>CSV Names vs Database Matches (<?= count($csvNames) ?> unique names)</h2>
-        <?php
-        $matched = 0;
-        $unmatched = 0;
-        
-        foreach ($csvNames as $csvName):
-            $key = strtolower($csvName);
-            $isMatch = isset($dbMap[$key]);
-            
-            if ($isMatch) {
-                $matched++;
-            } else {
-                $unmatched++;
-            }
-        ?>
-            <div class="<?= $isMatch ? 'match' : 'no-match' ?>">
-                <?= $isMatch ? '✅' : '❌' ?>
-                <strong><?= htmlspecialchars($csvName) ?></strong>
-                <?php if ($isMatch): ?>
-                    → Matches: <?= htmlspecialchars($dbMap[$key]['legal_entity_name']) ?>
-                <?php else: ?>
-                    → <span style="color: #721c24;">NO MATCH FOUND</span>
+        <div class="card">
+            <h2>📤 Upload Your Xero CSV</h2>
+            <div class="upload-box">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="file" name="csv_file" accept=".csv" required style="margin-bottom: 10px;">
+                    <button type="submit" class="btn">🔍 Check Matches</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 Your Database - Legal Entities with Xero Company Names (<?= count($entities) ?>)</h2>
+            <p style="color: #666; margin-bottom: 15px;">
+                These are the Xero Company Names in your database. Your CSV's "Contact Name" must match one of these (case-insensitive).
+            </p>
+
+            <?php if (empty($entities)): ?>
+                <div class="alert-error">
+                    <strong>⚠️ No Legal Entities Found!</strong>
+                    <p>You don't have any Legal Entities with Xero Company Names set.</p>
+                </div>
+            <?php else: ?>
+                <table>
+                    <tr>
+                        <th>Legal Entity Name</th>
+                        <th>Xero Company Name</th>
+                        <th>ID</th>
+                    </tr>
+                    <?php foreach ($entities as $entity): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($entity['legal_entity_name']) ?></td>
+                            <td><strong><?= htmlspecialchars($entity['xero_company_name']) ?></strong></td>
+                            <td><?= htmlspecialchars($entity['id']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </table>
+            <?php endif; ?>
+        </div>
+
+        <?php if (!empty($csvNames)): ?>
+            <div class="card">
+                <h2>🎯 Match Results (<?= count($csvNames) ?> unique Contact Names in CSV)</h2>
+
+                <?php
+                $matched = 0;
+                $unmatched = 0;
+                $matchedNames = [];
+                $unmatchedNames = [];
+
+                foreach ($csvNames as $csvName) {
+                    $key = strtolower($csvName);
+                    $isMatch = isset($dbMap[$key]);
+
+                    if ($isMatch) {
+                        $matched++;
+                        $matchedNames[] = [
+                            'csv' => $csvName,
+                            'entity' => $dbMap[$key]
+                        ];
+                    } else {
+                        $unmatched++;
+                        $unmatchedNames[] = $csvName;
+                    }
+                }
+                ?>
+
+                <div class="summary-box" style="margin-bottom: 20px;">
+                    <h3>Summary</h3>
+                    <div class="summary-stat">✅ <strong>Matched:</strong> <?= $matched ?> / <?= count($csvNames) ?> (<?= round(($matched / count($csvNames)) * 100, 1) ?>%)</div>
+                    <div class="summary-stat">❌ <strong>Unmatched:</strong> <?= $unmatched ?> / <?= count($csvNames) ?></div>
+                </div>
+
+                <?php if (!empty($matchedNames)): ?>
+                    <h3 style="margin-top: 20px; color: #28a745;">✅ Matched Names (<?= count($matchedNames) ?>)</h3>
+                    <p style="color: #666; margin-bottom: 10px;">These invoices will import successfully:</p>
+                    <?php foreach ($matchedNames as $match): ?>
+                        <div class="match">
+                            ✅ <strong><?= htmlspecialchars($match['csv']) ?></strong>
+                            → Matches: <?= htmlspecialchars($match['entity']['legal_entity_name']) ?> (<?= htmlspecialchars($match['entity']['id']) ?>)
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <?php if (!empty($unmatchedNames)): ?>
+                    <h3 style="margin-top: 20px; color: #dc3545;">❌ Unmatched Names (<?= count($unmatchedNames) ?>)</h3>
+                    <p style="color: #666; margin-bottom: 10px;">These invoices will be SKIPPED during import:</p>
+                    <?php foreach ($unmatchedNames as $name): ?>
+                        <div class="no-match">
+                            ❌ <strong><?= htmlspecialchars($name) ?></strong>
+                            → <span style="color: #721c24;">NO MATCH FOUND - You need to add this Xero Company Name to a Legal Entity first</span>
+                        </div>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </div>
-        <?php endforeach; ?>
-    </div>
+        <?php endif; ?>
 
-    <div class="section">
-        <h2>Summary</h2>
-        <p><strong>✅ Matched:</strong> <?= $matched ?> / <?= count($csvNames) ?></p>
-        <p><strong>❌ Unmatched:</strong> <?= $unmatched ?> / <?= count($csvNames) ?></p>
-        <p><strong>Match Rate:</strong> <?= round(($matched / count($csvNames)) * 100, 1) ?>%</p>
+        <div style="text-align: center; margin-top: 20px;">
+            <a href="index.php?page=import&type=xero" class="btn">⬅️ Back to Xero Import</a>
+        </div>
     </div>
 </body>
 </html>

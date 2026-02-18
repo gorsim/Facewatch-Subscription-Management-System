@@ -232,11 +232,11 @@ require __DIR__ . '/../layouts/header.php';
 
         <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #2196f3;">
             <strong>🔍 Before Importing:</strong>
-            <a href="/subscription-system/public/check_xero_matches.php" target="_blank" style="color: #1976d2; text-decoration: underline;">
+            <a href="check_xero_matches.php" target="_blank" style="color: #1976d2; text-decoration: underline;">
                 Check which CSV names will match your database
             </a>
             <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
-                This tool shows you which Contact Names from your CSV will successfully match Legal Entities in your database.
+                Upload your CSV to this tool first to see which Contact Names will successfully match Legal Entities in your database.
             </p>
         </div>
 
