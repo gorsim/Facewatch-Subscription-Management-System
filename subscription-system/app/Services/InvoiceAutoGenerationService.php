@@ -177,6 +177,9 @@ class InvoiceAutoGenerationService {
     /**
      * Convert a forecast invoice to an actual invoice
      * This is called when a forecast invoice's date arrives
+     *
+     * IMPORTANT: Converted forecasts should NOT generate new forecasts!
+     * They are standalone invoices, not the start of a new chain.
      */
     private function convertForecastToActual($forecastInvoice) {
         // Update the forecast invoice to make it an actual invoice
@@ -184,6 +187,7 @@ class InvoiceAutoGenerationService {
             'invoice_status' => 'draft',
             'is_forecast' => 0,
             'forecast_year' => null,
+            'parent_invoice_id' => null,  // Clear parent - this is now a standalone invoice
             'generation_date' => date('Y-m-d H:i:s'),
             'created_by' => 'auto_generation_system'
         ], 'id = :id', ['id' => $forecastInvoice['id']]);
@@ -191,13 +195,13 @@ class InvoiceAutoGenerationService {
         // Log the conversion
         $this->db->insert('invoice_generation_log', [
             'invoice_id' => $forecastInvoice['id'],
-            'generation_type' => 'auto_repeat',
+            'generation_type' => 'forecast_conversion',
             'generation_date' => date('Y-m-d H:i:s'),
             'triggered_by' => 'auto_generation_system',
-            'notes' => "Forecast invoice converted to actual invoice"
+            'notes' => "Forecast invoice converted to actual invoice (standalone - no new forecasts)"
         ]);
 
-        error_log("Converted forecast invoice {$forecastInvoice['invoice_number']} to actual invoice");
+        error_log("Converted forecast invoice {$forecastInvoice['invoice_number']} to actual invoice (standalone)");
     }
 
     /**
