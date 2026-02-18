@@ -80,8 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $uploadError = 'File upload failed with error code: ' . $file['error'];
     }
-} else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $uploadError = 'No file was uploaded';
+    } else {
+        $uploadError = 'No file was uploaded';
+    }
 }
 
 ?>
