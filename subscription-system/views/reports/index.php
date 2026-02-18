@@ -5,12 +5,19 @@
 
 use App\Models\Invoice;
 use App\Services\PrepaymentCalculator;
+use App\Services\InvoiceReconciliationService;
 use App\Database;
 
 $pageTitle = 'Reports';
 $page = 'reports';
 
 $report = $_GET['report'] ?? 'prepayments';
+
+// Auto-recalculate all invoices before displaying any report
+// This ensures the data is always up-to-date
+$reconciliationService = new InvoiceReconciliationService();
+$reconciliationService->reconcileAll();
+error_log("Auto-recalculated all invoices before displaying $report report");
 
 // Handle CSV exports BEFORE any HTML output
 
