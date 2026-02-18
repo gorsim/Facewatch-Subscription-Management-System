@@ -188,13 +188,37 @@ try {
             'is_auto_generated' => 0
         ]);
         
-        // Calculate price per camera for allocation
-        $pricePerCamera = $invoiceAmount / $totalCameras;
-
-        // Allocate cameras to invoice
+        // Allocate cameras to invoice with correct pricing per camera
         error_log("About to allocate " . count($cameras) . " cameras to invoice $invoiceId");
+
+        // Track which stores we've seen to identify first camera per store
+        $storeFirstCameraAssigned = [];
+
         foreach ($cameras as $camera) {
-            error_log("Allocating camera " . $camera['id'] . " to invoice");
+            $storeId = $camera['store_id'];
+
+            // Determine if this is the first camera for this store
+            $isFirstCameraInStore = !isset($storeFirstCameraAssigned[$storeId]);
+
+            // Calculate price for this camera based on pricing model
+            if ($pricing['pricing_type'] === 'first_plus_additional') {
+                // Independent pricing: first camera vs additional camera rates
+                if ($isFirstCameraInStore) {
+                    $priceForThisCamera = $pricing['first_camera_rate'];
+                    $pricingTier = 'First Camera';
+                    $storeFirstCameraAssigned[$storeId] = true;
+                } else {
+                    $priceForThisCamera = $pricing['additional_camera_rate'];
+                    $pricingTier = 'Additional Camera';
+                }
+            } else {
+                // Volume-based pricing: same rate for all cameras
+                $priceForThisCamera = $pricing['rate_to_use'];
+                $pricingTier = $pricing['tier_name'] ?? 'Standard';
+            }
+
+            error_log("Allocating camera " . $camera['id'] . " to invoice - Store: $storeId, Tier: $pricingTier, Price: £" . round($priceForThisCamera, 2));
+
             $db->insert('invoice_camera_allocations', [
                 'invoice_id' => $invoiceId,
                 'camera_installation_id' => $camera['id'],
@@ -202,8 +226,8 @@ try {
                 'legal_entity_id' => $legalEntityId,
                 'camera_type' => $camera['camera_type'],
                 'allocated_date' => $invoiceDate,
-                'price_charged' => round($pricePerCamera, 2),
-                'pricing_tier' => $pricing['tier_name'] ?? 'Standard'
+                'price_charged' => round($priceForThisCamera, 2),
+                'pricing_tier' => $pricingTier
             ]);
         }
 
