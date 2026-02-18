@@ -37,12 +37,17 @@ class LegalEntity extends Model {
     public function search($term) {
         $sql = "
             SELECT * FROM {$this->table}
-            WHERE legal_entity_name LIKE :term
-            OR legal_entity_id LIKE :term
-            OR xero_company_name LIKE :term
+            WHERE legal_entity_name LIKE :term1
+            OR legal_entity_id LIKE :term2
+            OR xero_company_name LIKE :term3
             ORDER BY legal_entity_name
         ";
-        return $this->fetchAll($sql, ['term' => "%{$term}%"]);
+        $searchTerm = "%{$term}%";
+        return $this->fetchAll($sql, [
+            'term1' => $searchTerm,
+            'term2' => $searchTerm,
+            'term3' => $searchTerm
+        ]);
     }
 
     public function getStores($legalEntityId) {

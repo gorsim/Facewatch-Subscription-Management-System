@@ -108,6 +108,8 @@ try {
         case 'admin':
             if ($action === 'pricing') {
                 require __DIR__ . '/../views/admin/pricing.php';
+            } elseif ($action === 'import_pricing') {
+                require __DIR__ . '/../views/admin/import_pricing.php';
             } elseif ($action === 'entity_pricing') {
                 require __DIR__ . '/../views/admin/entity_pricing.php';
             } elseif ($action === 'independent_pricing') {

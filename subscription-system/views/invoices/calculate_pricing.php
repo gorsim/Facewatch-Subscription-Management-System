@@ -20,8 +20,9 @@ $legalEntityId = $_POST['legal_entity_id'] ?? null;
 $cameraCount = intval($_POST['camera_count'] ?? 0);
 $mainCameras = intval($_POST['main_cameras'] ?? 0);
 $additionalCameras = intval($_POST['additional_cameras'] ?? 0);
+$invoiceDate = $_POST['invoice_date'] ?? date('Y-m-d'); // Use provided invoice date or default to today
 
-error_log("Parsed params - Entity: $legalEntityId, Count: $cameraCount, Main: $mainCameras, Additional: $additionalCameras");
+error_log("Parsed params - Entity: $legalEntityId, Count: $cameraCount, Main: $mainCameras, Additional: $additionalCameras, Invoice Date: $invoiceDate");
 
 // Validate input
 if (!$legalEntityId || $cameraCount <= 0) {
@@ -55,7 +56,8 @@ try {
     }
 
     // Get TOTAL active cameras for this legal entity to determine pricing tier
-    $asOfDate = date('Y-m-d');
+    // Use the invoice date to determine which cameras were active on that date
+    $asOfDate = $invoiceDate;
 
     $sql = "SELECT COUNT(*) as total
             FROM camera_installations ci
@@ -76,13 +78,13 @@ try {
     $totalActiveCameras = $db->fetchOne($sql, $params);
 
     $totalCameraCount = intval($totalActiveCameras['total'] ?? 0);
-    error_log("Total active cameras for entity $legalEntityId: $totalCameraCount");
+    error_log("Total active cameras for entity $legalEntityId on $asOfDate: $totalCameraCount");
 
-    // Get pricing based on TOTAL camera count (for tier), not just cameras being invoiced
+    // Get pricing based on TOTAL camera count (for tier) and invoice date
     $pricing = $pricingService->getPricingForEntity(
         $legalEntityId,
         $totalCameraCount,
-        date('Y-m-d')
+        $invoiceDate
     );
     
     // Calculate total amount based on pricing model

@@ -1,0 +1,34 @@
+min_cameras,max_cameras,price_per_annum,price_per_quarter,price_per_month,effective_date,notes
+1,49,3860,965,322,2024-01-01,2024 base pricing - Tier 1-49
+50,99,3700,925,308,2024-01-01,2024 base pricing - Tier 50-99
+100,199,3500,875,292,2024-01-01,2024 base pricing - Tier 100-199
+200,,3300,825,275,2024-01-01,2024 base pricing - Tier 200+
+1,49,3976,994,331,2025-01-01,2025 pricing - 3% increase - Tier 1-49
+50,99,3811,953,318,2025-01-01,2025 pricing - 3% increase - Tier 50-99
+100,199,3605,901,300,2025-01-01,2025 pricing - 3% increase - Tier 100-199
+200,,3399,850,283,2025-01-01,2025 pricing - 3% increase - Tier 200+
+1,49,4095,1024,341,2026-01-01,2026 pricing - 3% increase - Tier 1-49
+50,99,3925,981,327,2026-01-01,2026 pricing - 3% increase - Tier 50-99
+100,199,3713,928,309,2026-01-01,2026 pricing - 3% increase - Tier 100-199
+200,,3501,875,292,2026-01-01,2026 pricing - 3% increase - Tier 200+
+1,49,4218,1055,352,2027-01-01,2027 pricing - 3% increase - Tier 1-49
+50,99,4043,1011,337,2027-01-01,2027 pricing - 3% increase - Tier 50-99
+100,199,3824,956,319,2027-01-01,2027 pricing - 3% increase - Tier 100-199
+200,,3606,902,301,2027-01-01,2027 pricing - 3% increase - Tier 200+
+1,49,4345,1086,362,2028-01-01,2028 pricing - 3% increase - Tier 1-49
+50,99,4164,1041,347,2028-01-01,2028 pricing - 3% increase - Tier 50-99
+100,199,3939,985,328,2028-01-01,2028 pricing - 3% increase - Tier 100-199
+200,,3714,929,310,2028-01-01,2028 pricing - 3% increase - Tier 200+
+1,49,4475,1119,373,2029-01-01,2029 pricing - 3% increase - Tier 1-49
+50,99,4289,1072,357,2029-01-01,2029 pricing - 3% increase - Tier 50-99
+100,199,4057,1014,338,2029-01-01,2029 pricing - 3% increase - Tier 100-199
+200,,3825,956,319,2029-01-01,2029 pricing - 3% increase - Tier 200+
+1,49,4609,1152,384,2030-01-01,2030 pricing - 3% increase - Tier 1-49
+50,99,4418,1105,368,2030-01-01,2030 pricing - 3% increase - Tier 50-99
+100,199,4179,1045,348,2030-01-01,2030 pricing - 3% increase - Tier 100-199
+200,,3940,985,328,2030-01-01,2030 pricing - 3% increase - Tier 200+
+1,49,4747,1187,396,2031-01-01,2031 pricing - 3% increase - Tier 1-49
+50,99,4550,1138,379,2031-01-01,2031 pricing - 3% increase - Tier 50-99
+100,199,4304,1076,359,2031-01-01,2031 pricing - 3% increase - Tier 100-199
+200,,4058,1015,338,2031-01-01,2031 pricing - 3% increase - Tier 200+
+

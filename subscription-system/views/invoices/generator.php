@@ -213,6 +213,7 @@ require __DIR__ . '/../layouts/header.php';
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Invoice Date:</label>
                         <input type="date"
+                               id="invoiceDate"
                                name="invoice_date"
                                value="<?= $lastMonthEnd->format('Y-m-d') ?>"
                                required
@@ -308,13 +309,16 @@ function calculateAmount() {
 
     const totalCameras = mainCameras + additionalCameras;
 
+    // Get the invoice date from the form
+    const invoiceDate = document.getElementById('invoiceDate').value || new Date().toISOString().split('T')[0];
+
     // Make AJAX call to get pricing
     fetch('?page=invoices&action=calculate_pricing', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `legal_entity_id=${legalEntityId}&camera_count=${totalCameras}&main_cameras=${mainCameras}&additional_cameras=${additionalCameras}`
+        body: `legal_entity_id=${legalEntityId}&camera_count=${totalCameras}&main_cameras=${mainCameras}&additional_cameras=${additionalCameras}&invoice_date=${invoiceDate}`
     })
     .then(response => response.json())
     .then(data => {
@@ -375,6 +379,14 @@ document.querySelectorAll('.select-entity-btn').forEach(button => {
         this.textContent = allChecked ? '✓ Select All' : '✗ Deselect All';
         updateSelectedCount();
     });
+});
+
+// Handle invoice date changes - recalculate pricing when date changes
+document.getElementById('invoiceDate')?.addEventListener('change', function() {
+    // Recalculate pricing if cameras are selected
+    if (selectedCameras.size > 0) {
+        calculateAmount();
+    }
 });
 
 // Form validation

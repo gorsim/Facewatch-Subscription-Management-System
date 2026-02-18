@@ -97,7 +97,8 @@ require __DIR__ . '/../layouts/header.php';
             <p style="color: #666; margin-top: 5px;">
                 Manage default volume-based pricing tiers.
                 <a href="?page=admin&action=pricing_dashboard">View Pricing Dashboard →</a> |
-                <a href="?page=admin&action=independent_pricing">Manage Independent Pricing →</a>
+                <a href="?page=admin&action=independent_pricing">Manage Independent Pricing →</a> |
+                <a href="?page=admin&action=import_pricing" style="color: #27ae60; font-weight: bold;">📥 Import from CSV →</a>
             </p>
         </div>
         <a href="?page=admin" class="btn">← Back to Admin</a>
@@ -204,9 +205,9 @@ require __DIR__ . '/../layouts/header.php';
                             <td>
                                 <strong><?= $tier['min_cameras'] ?>-<?= $tier['max_cameras'] ?? '∞' ?></strong> cameras
                             </td>
-                            <td>£<?= number_format($tier['price_per_annum'], 2) ?></td>
-                            <td>£<?= number_format($tier['price_per_quarter'], 2) ?></td>
-                            <td>£<?= number_format($tier['price_per_month'], 2) ?></td>
+                            <td>£<?= number_format($tier['price_per_annum'], 0) ?></td>
+                            <td>£<?= number_format($tier['price_per_quarter'], 0) ?></td>
+                            <td>£<?= number_format($tier['price_per_month'], 0) ?></td>
                             <td><?= htmlspecialchars($tier['notes']) ?></td>
                             <td>
                                 <a href="?page=admin&action=pricing&edit_id=<?= $tier['id'] ?>" 
