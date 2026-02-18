@@ -10,9 +10,13 @@
         .value { color: #007bff; }
         .null { color: #dc3545; font-style: italic; }
         .rate { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid #28a745; }
+        .port-note { background: #fff3cd; padding: 10px; margin: 10px 0; border-left: 4px solid #ffc107; }
     </style>
 </head>
 <body>
+<div class="port-note">
+    <strong>📍 Correct URL:</strong> http://localhost:8080/subscription-system/check_henderson.php
+</div>
 <?php
 require_once __DIR__ . '/app/Database.php';
 
