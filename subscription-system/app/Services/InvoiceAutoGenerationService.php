@@ -32,57 +32,71 @@ class InvoiceAutoGenerationService {
         if ($asOfDate === null) {
             $asOfDate = date('Y-m-d');
         }
-        
+
         $results = [
             'checked' => 0,
             'generated' => 0,
+            'converted' => 0,
             'skipped' => 0,
             'errors' => 0,
             'invoices' => []
         ];
-        
+
         // Find all invoices due for generation
         $dueInvoices = $this->findInvoicesDueForGeneration($asOfDate);
         $results['checked'] = count($dueInvoices);
-        
-        foreach ($dueInvoices as $parentInvoice) {
+
+        foreach ($dueInvoices as $invoice) {
             try {
-                // Check if already generated
-                if ($this->hasBeenGenerated($parentInvoice['id'], $asOfDate)) {
+                // Handle forecast invoices differently - convert them to actual invoices
+                if ($invoice['is_forecast']) {
+                    $this->convertForecastToActual($invoice);
+                    $results['converted']++;
+                    $results['invoices'][] = [
+                        'invoice_id' => $invoice['id'],
+                        'invoice_number' => $invoice['invoice_number'],
+                        'status' => 'converted',
+                        'reason' => 'Forecast converted to actual invoice'
+                    ];
+                    continue;
+                }
+
+                // For actual invoices, check if already generated
+                if ($this->hasBeenGenerated($invoice['id'], $asOfDate)) {
                     $results['skipped']++;
                     $results['invoices'][] = [
-                        'parent_id' => $parentInvoice['id'],
-                        'parent_number' => $parentInvoice['invoice_number'],
+                        'parent_id' => $invoice['id'],
+                        'parent_number' => $invoice['invoice_number'],
                         'status' => 'skipped',
                         'reason' => 'Already generated for this period'
                     ];
                     continue;
                 }
-                
-                // Generate new invoice
-                $newInvoiceId = $this->generateNextInvoice($parentInvoice, $asOfDate);
-                
+
+                // Generate new invoice from actual invoice
+                $newInvoiceId = $this->generateNextInvoice($invoice, $asOfDate);
+
                 $results['generated']++;
                 $results['invoices'][] = [
-                    'parent_id' => $parentInvoice['id'],
-                    'parent_number' => $parentInvoice['invoice_number'],
+                    'parent_id' => $invoice['id'],
+                    'parent_number' => $invoice['invoice_number'],
                     'new_id' => $newInvoiceId,
                     'status' => 'generated'
                 ];
-                
+
             } catch (Exception $e) {
                 $results['errors']++;
                 $results['invoices'][] = [
-                    'parent_id' => $parentInvoice['id'],
-                    'parent_number' => $parentInvoice['invoice_number'],
+                    'invoice_id' => $invoice['id'],
+                    'invoice_number' => $invoice['invoice_number'],
                     'status' => 'error',
                     'error' => $e->getMessage()
                 ];
-                
-                error_log("Auto-generation error for invoice {$parentInvoice['invoice_number']}: " . $e->getMessage());
+
+                error_log("Auto-generation error for invoice {$invoice['invoice_number']}: " . $e->getMessage());
             }
         }
-        
+
         return $results;
     }
     
@@ -158,6 +172,32 @@ class InvoiceAutoGenerationService {
         }
         
         return $newInvoiceId;
+    }
+
+    /**
+     * Convert a forecast invoice to an actual invoice
+     * This is called when a forecast invoice's date arrives
+     */
+    private function convertForecastToActual($forecastInvoice) {
+        // Update the forecast invoice to make it an actual invoice
+        $this->db->update('invoices', [
+            'invoice_status' => 'draft',
+            'is_forecast' => 0,
+            'forecast_year' => null,
+            'generation_date' => date('Y-m-d H:i:s'),
+            'created_by' => 'auto_generation_system'
+        ], 'id = :id', ['id' => $forecastInvoice['id']]);
+
+        // Log the conversion
+        $this->db->insert('invoice_generation_log', [
+            'invoice_id' => $forecastInvoice['id'],
+            'generation_type' => 'auto_repeat',
+            'generation_date' => date('Y-m-d H:i:s'),
+            'triggered_by' => 'auto_generation_system',
+            'notes' => "Forecast invoice converted to actual invoice"
+        ]);
+
+        error_log("Converted forecast invoice {$forecastInvoice['invoice_number']} to actual invoice");
     }
 
     /**
@@ -358,18 +398,40 @@ class InvoiceAutoGenerationService {
      */
     private function calculateNextDate($baseDate, $periods = 1, $paymentFrequency = 'annual') {
         $date = new DateTime($baseDate);
+        $originalDay = (int)$date->format('d');
 
         switch ($paymentFrequency) {
             case 'monthly':
-                $date->modify("+{$periods} month");
+                // Add months while preserving the day of month
+                for ($i = 0; $i < $periods; $i++) {
+                    $date->modify('+1 month');
+                    // If the day changed (e.g., Jan 31 -> Mar 3), set to last day of target month
+                    $newDay = (int)$date->format('d');
+                    if ($newDay < $originalDay) {
+                        $date->modify('last day of previous month');
+                    }
+                }
                 break;
             case 'quarterly':
-                $months = $periods * 3;
-                $date->modify("+{$months} month");
+                // Add quarters (3 months) while preserving the day of month
+                for ($i = 0; $i < $periods; $i++) {
+                    $date->modify('+3 months');
+                    // If the day changed, set to last day of target month
+                    $newDay = (int)$date->format('d');
+                    if ($newDay < $originalDay) {
+                        $date->modify('last day of previous month');
+                    }
+                }
                 break;
             case 'annual':
             default:
+                // Annual should naturally preserve the day (except Feb 29 in non-leap years)
                 $date->modify("+{$periods} year");
+                // Handle Feb 29 edge case
+                $newDay = (int)$date->format('d');
+                if ($newDay < $originalDay) {
+                    $date->modify('last day of previous month');
+                }
                 break;
         }
 

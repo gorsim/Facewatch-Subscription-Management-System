@@ -1,13 +1,14 @@
 <?php
 /**
- * Auto-Generate Invoices Cron Job
- * Run this daily to automatically generate repeat invoices
+ * Test Auto-Generation Script
+ * Run this to manually test the auto-generation system
  * 
  * Usage:
- *   php cron/auto-generate-invoices.php
+ *   php scripts/test_auto_generation.php [date]
  * 
- * Cron schedule (daily at 2am):
- *   0 2 * * * cd /path/to/subscription-system && php cron/auto-generate-invoices.php >> logs/auto-generation.log 2>&1
+ * Examples:
+ *   php scripts/test_auto_generation.php              # Use today's date
+ *   php scripts/test_auto_generation.php 2025-12-01   # Use specific date
  */
 
 require_once __DIR__ . '/../app/Database.php';
@@ -17,12 +18,18 @@ require_once __DIR__ . '/../app/Services/PricingService.php';
 
 use App\Services\InvoiceAutoGenerationService;
 
-echo "=== Invoice Auto-Generation Cron Job ===\n";
-echo "Started: " . date('Y-m-d H:i:s') . "\n\n";
+// Get date from command line or use today
+$asOfDate = $argv[1] ?? date('Y-m-d');
+
+echo "=== Testing Invoice Auto-Generation ===\n";
+echo "As of date: {$asOfDate}\n";
+echo "Current date: " . date('Y-m-d H:i:s') . "\n\n";
 
 try {
     $service = new InvoiceAutoGenerationService();
-    $results = $service->runAutoGeneration();
+    
+    echo "Running auto-generation...\n\n";
+    $results = $service->runAutoGeneration($asOfDate);
     
     echo "Results:\n";
     echo "  Checked: {$results['checked']} invoices\n";
@@ -34,7 +41,8 @@ try {
     if (!empty($results['invoices'])) {
         echo "Details:\n";
         foreach ($results['invoices'] as $invoice) {
-            echo "  - {$invoice['parent_number']}: {$invoice['status']}";
+            $number = $invoice['invoice_number'] ?? $invoice['parent_number'] ?? 'Unknown';
+            echo "  - {$number}: {$invoice['status']}";
             if (isset($invoice['new_id'])) {
                 echo " (New ID: {$invoice['new_id']})";
             }
@@ -48,13 +56,13 @@ try {
         }
     }
     
-    echo "\n✅ Auto-generation completed successfully\n";
+    echo "\n✅ Test completed successfully\n";
     echo "Finished: " . date('Y-m-d H:i:s') . "\n";
     
     exit(0);
     
 } catch (Exception $e) {
-    echo "\n❌ Auto-generation failed: " . $e->getMessage() . "\n";
+    echo "\n❌ Test failed: " . $e->getMessage() . "\n";
     echo "Stack trace:\n" . $e->getTraceAsString() . "\n";
     echo "Finished: " . date('Y-m-d H:i:s') . "\n";
     
