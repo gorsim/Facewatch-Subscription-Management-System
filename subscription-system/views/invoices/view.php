@@ -208,16 +208,32 @@ require __DIR__ . '/../layouts/header.php';
                 <?php endif; ?>
             </div>
         </div>
+        <?php
+        // Calculate expected amount from allocated cameras
+        $calculatedAmount = array_sum(array_column($db_allocations, 'price_charged'));
+        $needsRecalc = abs($invoice['invoice_amount'] - $calculatedAmount) > 0.01;
+        ?>
+
+        <?php if ($needsRecalc && $invoice['invoice_status'] === 'draft'): ?>
+            <div class="alert alert-warning" style="margin-bottom: 15px;">
+                ⚠️ <strong>Amount Mismatch:</strong> Invoice amount (£<?= number_format($invoice['invoice_amount'], 2) ?>)
+                doesn't match allocated cameras (£<?= number_format($calculatedAmount, 2) ?>).
+                Use the recalculate button below to fix this.
+            </div>
+        <?php endif; ?>
+
         <div style="display: flex; gap: 10px;">
             <a href="?page=invoices&action=cluster&legal_entity_id=<?= htmlspecialchars($invoice['legal_entity_pk']) ?>&invoice_id=<?= htmlspecialchars($invoice['id']) ?>"
                class="btn btn-primary">
                 📅 View Timeline
             </a>
-            <a href="?page=invoices&action=reconcile&id=<?= $invoiceId ?>"
-               class="btn btn-success"
-               onclick="return confirm('Recalculate expected amount for this invoice?')">
-                🔄 Recalculate Expected Amount
-            </a>
+            <?php if ($invoice['invoice_status'] === 'draft'): ?>
+                <a href="?page=invoices&action=reconcile&id=<?= $invoiceId ?>"
+                   class="btn btn-primary"
+                   onclick="return confirm('This will recalculate the invoice amount based on allocated cameras. The current amount (£<?= number_format($invoice['invoice_amount'], 2) ?>) will be replaced with £<?= number_format($calculatedAmount, 2) ?>. Continue?')">
+                    🔄 Recalculate Expected Amount
+                </a>
+            <?php endif; ?>
             <a href="?page=invoices" class="btn">← Back to Invoices</a>
         </div>
     </div>
