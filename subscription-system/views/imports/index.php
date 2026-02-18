@@ -3,7 +3,6 @@
  * Import Data Page
  */
 
-use App\Services\XeroImporter;
 use App\Services\SubscriberImporter;
 use App\Services\StoreImporter;
 use App\Services\CameraInstallationImporter;
@@ -62,31 +61,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
                 } else {
                     $errors = $importer->getErrors();
                 }
-            } elseif ($type === 'xero') {
-                $importer = new XeroImporter();
-                $success = $importer->import($targetPath);
-
-                if ($success) {
-                    $imported = $importer->getImported();
-                    $skipped = $importer->getSkipped();
-                    $importErrors = $importer->getErrors();
-
-                    if ($imported > 0) {
-                        $message = "✅ Successfully imported {$imported} invoice(s).";
-                        if ($skipped > 0) {
-                            $message .= " ⚠️ Skipped {$skipped} row(s) - see details below.";
-                        }
-                    } else {
-                        $message = "⚠️ No invoices were imported. All rows were skipped - see errors below.";
-                    }
-
-                    // Add any errors from skipped rows
-                    if (!empty($importErrors)) {
-                        $errors = array_merge($errors, $importErrors);
-                    }
-                } else {
-                    $errors = $importer->getErrors();
-                }
             }
         } catch (Exception $e) {
             $errors[] = $e->getMessage();
@@ -128,7 +102,6 @@ require __DIR__ . '/../layouts/header.php';
         <a href="?page=import&type=subscribers" class="btn <?= $type === 'subscribers' ? 'btn-success' : '' ?>">Legal Entities</a>
         <a href="?page=import&type=stores" class="btn <?= $type === 'stores' ? 'btn-success' : '' ?>">Stores</a>
         <a href="?page=import&type=camera_installations" class="btn <?= $type === 'camera_installations' ? 'btn-success' : '' ?>">Camera Installations</a>
-        <a href="?page=import&type=xero" class="btn <?= $type === 'xero' ? 'btn-success' : '' ?>">Xero Invoices</a>
     </div>
 
     <?php if ($type === 'subscribers'): ?>
@@ -226,51 +199,6 @@ require __DIR__ . '/../layouts/header.php';
             <button type="submit" class="btn btn-success">Import Camera Installations</button>
         </form>
 
-    <?php elseif ($type === 'xero'): ?>
-        <h3>Import Xero Invoices</h3>
-        <p>Upload a CSV file exported from Xero containing invoice data.</p>
-
-        <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #2196f3;">
-            <strong>🔍 Before Importing:</strong>
-            <a href="check_xero_matches.php" target="_blank" style="color: #1976d2; text-decoration: underline;">
-                Check which CSV names will match your database
-            </a>
-            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #666;">
-                Upload your CSV to this tool first to see which Contact Names will successfully match Legal Entities in your database.
-            </p>
-        </div>
-
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <strong>Required CSV Columns:</strong>
-            <ul style="margin-top: 10px;">
-                <li><strong>Contact Name</strong> - Must match the "Xero Company Name" in your Legal Entities</li>
-                <li><strong>Invoice Number</strong> - Unique invoice reference (duplicates will be rejected)</li>
-                <li><strong>Invoice Date</strong> - Date format: YYYY-MM-DD or DD/MM/YYYY</li>
-                <li><strong>Date</strong> - Alternative to Invoice Date</li>
-                <li><strong>Amount</strong> or <strong>Amount Due</strong> - Invoice total</li>
-            </ul>
-            <strong>Optional Columns:</strong>
-            <ul style="margin-top: 10px;">
-                <li><strong>Invoice ID</strong> - Xero's internal ID (UUID)</li>
-                <li><strong>Due Date</strong> - Payment due date</li>
-                <li><strong>Status</strong> - PAID/UNPAID</li>
-                <li><strong>Payment Date</strong> - If paid</li>
-            </ul>
-            <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                <strong>⚠️ Important:</strong> The "Contact Name" in your CSV must exactly match the "Xero Company Name"
-                field in your Legal Entities. If it doesn't match, the import will fail with an error message.
-            </div>
-        </div>
-
-        <form method="POST" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="import_file">Select CSV File</label>
-                <input type="file" id="import_file" name="import_file" accept=".csv" required>
-            </div>
-
-            <button type="submit" class="btn btn-success">Import Xero Data</button>
-        </form>
-
     <?php endif; ?>
 </div>
 
@@ -286,8 +214,6 @@ require __DIR__ . '/../layouts/header.php';
         $imports = $db->fetchAll("SELECT * FROM store_imports ORDER BY import_date DESC LIMIT 10");
     } elseif ($type === 'camera_installations') {
         $imports = $db->fetchAll("SELECT * FROM camera_installation_imports ORDER BY import_date DESC LIMIT 10");
-    } elseif ($type === 'xero') {
-        $imports = $db->fetchAll("SELECT * FROM xero_imports ORDER BY import_date DESC LIMIT 10");
     } else {
         $imports = $db->fetchAll("SELECT * FROM camera_imports ORDER BY import_date DESC LIMIT 10");
     }
