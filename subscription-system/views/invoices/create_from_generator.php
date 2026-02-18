@@ -194,15 +194,16 @@ try {
         // Track which stores we've seen to identify first camera per store
         $storeFirstCameraAssigned = [];
 
+        // First pass: calculate what the total WOULD be with standard pricing
+        $calculatedTotal = 0;
+        $cameraAllocations = [];
+
         foreach ($cameras as $camera) {
             $storeId = $camera['store_id'];
-
-            // Determine if this is the first camera for this store
             $isFirstCameraInStore = !isset($storeFirstCameraAssigned[$storeId]);
 
             // Calculate price for this camera based on pricing model
             if ($pricing['pricing_type'] === 'first_plus_additional') {
-                // Independent pricing: first camera vs additional camera rates
                 if ($isFirstCameraInStore) {
                     $priceForThisCamera = $pricing['first_camera_rate'];
                     $pricingTier = 'First Camera';
@@ -212,22 +213,46 @@ try {
                     $pricingTier = 'Additional Camera';
                 }
             } else {
-                // Volume-based pricing: same rate for all cameras
                 $priceForThisCamera = $pricing['rate_to_use'];
                 $pricingTier = $pricing['tier_name'] ?? 'Standard';
             }
 
-            error_log("Allocating camera " . $camera['id'] . " to invoice - Store: $storeId, Tier: $pricingTier, Price: £" . round($priceForThisCamera, 2));
+            $calculatedTotal += $priceForThisCamera;
+            $cameraAllocations[] = [
+                'camera' => $camera,
+                'base_price' => $priceForThisCamera,
+                'pricing_tier' => $pricingTier,
+                'store_id' => $storeId
+            ];
+        }
+
+        // Calculate variance if override amount was used
+        $variance = 0;
+        if ($overrideAmount !== null) {
+            $variance = $invoiceAmount - $calculatedTotal;
+            error_log("Override amount: £$invoiceAmount, Calculated total: £$calculatedTotal, Variance: £$variance");
+        }
+
+        // Distribute variance proportionally across cameras
+        $variancePerCamera = count($cameraAllocations) > 0 ? $variance / count($cameraAllocations) : 0;
+
+        // Second pass: insert allocations with adjusted prices
+        foreach ($cameraAllocations as $allocation) {
+            $finalPrice = $allocation['base_price'] + $variancePerCamera;
+
+            error_log("Allocating camera " . $allocation['camera']['id'] . " - Store: " . $allocation['store_id'] .
+                     ", Tier: " . $allocation['pricing_tier'] . ", Base: £" . round($allocation['base_price'], 2) .
+                     ", Adjustment: £" . round($variancePerCamera, 2) . ", Final: £" . round($finalPrice, 2));
 
             $db->insert('invoice_camera_allocations', [
                 'invoice_id' => $invoiceId,
-                'camera_installation_id' => $camera['id'],
-                'store_id' => $camera['store_id'],
+                'camera_installation_id' => $allocation['camera']['id'],
+                'store_id' => $allocation['camera']['store_id'],
                 'legal_entity_id' => $legalEntityId,
-                'camera_type' => $camera['camera_type'],
+                'camera_type' => $allocation['camera']['camera_type'],
                 'allocated_date' => $invoiceDate,
-                'price_charged' => round($priceForThisCamera, 2),
-                'pricing_tier' => $pricingTier
+                'price_charged' => round($finalPrice, 2),
+                'pricing_tier' => $allocation['pricing_tier']
             ]);
         }
 
