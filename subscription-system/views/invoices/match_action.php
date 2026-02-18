@@ -272,6 +272,7 @@ try {
                         $match['matched_invoice_id'],
                         $match['xero_invoice_id'],
                         $match['xero_invoice_number'],
+                        $match['amount'],  // Add the missing Xero invoice amount
                         $_SESSION['user_email'] ?? 'system'
                     );
                     error_log("reconcileToXero completed successfully");
