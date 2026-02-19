@@ -15,6 +15,104 @@ $db = Database::getInstance();
 $lastMonthEnd = new DateTime('last day of last month');
 $cutoffDate = $_GET['cutoff_date'] ?? $lastMonthEnd->format('Y-m-d');
 
+// Handle CSV export BEFORE any HTML output
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    // Get sort order
+    $sortBy = $_GET['sort'] ?? 'legal_entity';
+    $sortOrder = $sortBy === 'legal_entity' ? 'le.legal_entity_name, ci.installation_date' : 'ci.installation_date DESC, le.legal_entity_name';
+
+    // Get search filter
+    $searchTerm = $_GET['search'] ?? '';
+
+    // Build WHERE conditions
+    $whereConditions = ["ci.installation_date <= :cutoff_date"];
+    $params = ['cutoff_date' => $cutoffDate];
+
+    // Add search filter if provided
+    if (!empty($searchTerm)) {
+        $whereConditions[] = "(le.legal_entity_name LIKE :search OR s.store_name LIKE :search2 OR ci.safr_code LIKE :search3)";
+        $params['search'] = "%$searchTerm%";
+        $params['search2'] = "%$searchTerm%";
+        $params['search3'] = "%$searchTerm%";
+    }
+
+    $whereClause = implode(' AND ', $whereConditions);
+
+    // Get all uninvoiced cameras
+    $uninvoicedCameras = $db->fetchAll(
+        "SELECT
+            ci.id as camera_id,
+            ci.installation_date,
+            ci.camera_name,
+            ci.safr_code,
+            ci.camera_type,
+            ci.store_id,
+            s.store_name,
+            s.store_id as store_identifier,
+            s.city,
+            s.postcode,
+            le.id as legal_entity_id,
+            le.legal_entity_name,
+            le.payment_frequency,
+            CASE
+                WHEN le.payment_frequency = 'monthly' THEN 1
+                WHEN le.payment_frequency = 'quarterly' THEN 3
+                WHEN le.payment_frequency = 'annually' THEN 12
+                ELSE 1
+            END as invoice_period_months
+         FROM camera_installations ci
+         JOIN stores s ON ci.store_id = s.id
+         JOIN legal_entities le ON s.legal_entity_id = le.id
+         WHERE $whereClause
+         AND ci.id NOT IN (
+             SELECT camera_installation_id
+             FROM invoice_camera_allocations
+         )
+         ORDER BY $sortOrder",
+        $params
+    );
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="uninvoiced_cameras_' . date('Y-m-d') . '.csv"');
+
+    $output = fopen('php://output', 'w');
+
+    // CSV headers
+    fputcsv($output, [
+        'Legal Entity',
+        'Store Name',
+        'Store ID',
+        'City',
+        'Postcode',
+        'Camera Name',
+        'SAFR Code',
+        'Camera Type',
+        'Installation Date',
+        'Invoice Period (Months)',
+        'Payment Frequency'
+    ]);
+
+    // Data rows
+    foreach ($uninvoicedCameras as $camera) {
+        fputcsv($output, [
+            $camera['legal_entity_name'],
+            $camera['store_name'],
+            $camera['store_identifier'],
+            $camera['city'] ?: '-',
+            $camera['postcode'] ?: '-',
+            $camera['camera_name'] ?: '-',
+            $camera['safr_code'] ?: '-',
+            ucfirst($camera['camera_type']),
+            date('d/m/Y', strtotime($camera['installation_date'])),
+            $camera['invoice_period_months'],
+            ucfirst($camera['payment_frequency'])
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+
 // Get sort order
 $sortBy = $_GET['sort'] ?? 'legal_entity';
 $sortOrder = $sortBy === 'legal_entity' ? 'le.legal_entity_name, ci.installation_date' : 'ci.installation_date DESC, le.legal_entity_name';
@@ -126,6 +224,21 @@ require __DIR__ . '/../layouts/header.php';
             <?php if (!empty($searchTerm)): ?>
                 <a href="?page=invoices&action=generator&cutoff_date=<?= urlencode($cutoffDate) ?>&sort=<?= urlencode($sortBy) ?>" class="btn">Clear Search</a>
             <?php endif; ?>
+            <?php
+            // Build export URL with all current filters
+            $exportParams = [
+                'page' => 'invoices',
+                'action' => 'generator',
+                'export' => 'csv',
+                'cutoff_date' => $cutoffDate,
+                'sort' => $sortBy
+            ];
+            if (!empty($searchTerm)) $exportParams['search'] = $searchTerm;
+            $exportUrl = '?' . http_build_query($exportParams);
+            ?>
+            <a href="<?= $exportUrl ?>" class="btn btn-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+            </a>
         </form>
 
         <?php if (!empty($searchTerm)): ?>
