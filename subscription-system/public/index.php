@@ -74,7 +74,7 @@ try {
             break;
 
         case 'cameras':
-            if ($action === 'edit' || $action === 'new' || $action === 'delete') {
+            if ($action === 'edit' || $action === 'new' || $action === 'delete' || $action === 'movements' || $action === 'movement_detail') {
                 require __DIR__ . '/../views/cameras/' . $action . '.php';
             } else {
                 // Redirect to dashboard if no action

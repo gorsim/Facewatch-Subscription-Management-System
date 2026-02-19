@@ -58,6 +58,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
 
                 if ($success) {
                     $message = "Successfully imported {$importer->getImported()} camera installations. Skipped {$importer->getSkipped()} duplicates.";
+
+                    // Add movement detection info
+                    if ($importer->getMovementsDetected() > 0) {
+                        $message .= "<br><strong>📦 Camera Movements Detected: {$importer->getMovementsDetected()}</strong>";
+                        $message .= "<br>• {$importer->getInvoicesAutoUpdated()} draft invoices automatically updated";
+                        if ($importer->getInvoicesFlaggedForXero() > 0) {
+                            $message .= "<br>• <span class='text-warning'>{$importer->getInvoicesFlaggedForXero()} issued invoices flagged for Xero correction</span>";
+                            $message .= "<br><a href='?page=cameras&action=movements' class='btn btn-sm btn-warning mt-2'><i class='bi bi-exclamation-triangle'></i> View Xero Corrections Required</a>";
+                        }
+                    }
                 } else {
                     $errors = $importer->getErrors();
                 }
@@ -76,8 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
 require __DIR__ . '/../layouts/header.php';
 ?>
 
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Import Data</h2>
+        <a href="?page=cameras&action=movements" class="btn btn-info">
+            <i class="bi bi-arrow-left-right"></i> View Camera Movements
+        </a>
+    </div>
+</div>
+
 <?php if ($message): ?>
-    <div class="alert alert-success"><?= htmlspecialchars($message) ?></div>
+    <div class="alert alert-success"><?= $message ?></div>
 <?php endif; ?>
 
 <?php if (!empty($errors)): ?>
@@ -230,6 +249,9 @@ require __DIR__ . '/../layouts/header.php';
                     <?php endif; ?>
                     <th><?= $type === 'subscribers' ? 'New' : 'Imported' ?></th>
                     <th><?= $type === 'subscribers' ? 'Updated' : 'Skipped/Updated' ?></th>
+                    <?php if ($type === 'camera_installations'): ?>
+                        <th>Movements</th>
+                    <?php endif; ?>
                     <th>Errors</th>
                 </tr>
             </thead>
@@ -252,6 +274,20 @@ require __DIR__ . '/../layouts/header.php';
                     <?php endif; ?>
                     <td><?= $import['rows_imported'] ?? $import['records_imported'] ?? 0 ?></td>
                     <td><?= $import['rows_failed'] ?? $import['records_skipped'] ?? $import['records_updated'] ?? 0 ?></td>
+                    <?php if ($type === 'camera_installations'): ?>
+                        <td>
+                            <?php if (isset($import['movements_detected']) && $import['movements_detected'] > 0): ?>
+                                <span class="badge bg-info"><?= $import['movements_detected'] ?></span>
+                                <?php if ($import['invoices_flagged_for_xero'] > 0): ?>
+                                    <span class="badge bg-warning text-dark" title="Requires Xero correction">
+                                        <i class="bi bi-exclamation-triangle"></i> <?= $import['invoices_flagged_for_xero'] ?>
+                                    </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                -
+                            <?php endif; ?>
+                        </td>
+                    <?php endif; ?>
                     <td>
                         <?php
                         $errors = json_decode($import['error_log'] ?? $import['errors'] ?? '[]', true);
