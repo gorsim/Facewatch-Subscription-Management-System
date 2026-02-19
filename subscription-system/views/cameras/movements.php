@@ -115,7 +115,7 @@ require __DIR__ . '/../layouts/header.php';
                     <i class="bi bi-download"></i> Export Xero Corrections
                 </a>
             <?php endif; ?>
-            <a href="?page=imports" class="btn btn-secondary">
+            <a href="?page=imports&action=index" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Back to Imports
             </a>
         </div>
@@ -123,13 +123,16 @@ require __DIR__ . '/../layouts/header.php';
 
     <!-- Filters -->
     <div class="card mb-4">
+        <div class="card-header">
+            <strong>Filter Movements</strong>
+        </div>
         <div class="card-body">
             <form method="GET" class="row g-3">
                 <input type="hidden" name="page" value="cameras">
                 <input type="hidden" name="action" value="movements">
 
-                <div class="col-md-4">
-                    <label class="form-label">Xero Status</label>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Xero Status</label>
                     <select name="status" class="form-select">
                         <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>All</option>
                         <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>Pending</option>
@@ -139,8 +142,8 @@ require __DIR__ . '/../layouts/header.php';
                     </select>
                 </div>
 
-                <div class="col-md-4">
-                    <label class="form-label">Requires Xero Correction</label>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Requires Xero Correction</label>
                     <select name="requires_xero" class="form-select">
                         <option value="">All</option>
                         <option value="1" <?= $requiresXero === true ? 'selected' : '' ?>>Yes</option>
@@ -148,9 +151,13 @@ require __DIR__ . '/../layouts/header.php';
                     </select>
                 </div>
 
-                <div class="col-md-4 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary me-2">Apply Filters</button>
-                    <a href="?page=cameras&action=movements" class="btn btn-outline-secondary">Clear</a>
+                <div class="col-md-6 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                    <a href="?page=cameras&action=movements" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> Clear
+                    </a>
                 </div>
             </form>
         </div>
