@@ -19,6 +19,23 @@ $cutoffDate = $_GET['cutoff_date'] ?? $lastMonthEnd->format('Y-m-d');
 $sortBy = $_GET['sort'] ?? 'legal_entity';
 $sortOrder = $sortBy === 'legal_entity' ? 'le.legal_entity_name, ci.installation_date' : 'ci.installation_date DESC, le.legal_entity_name';
 
+// Get search filter
+$searchTerm = $_GET['search'] ?? '';
+
+// Build WHERE conditions
+$whereConditions = ["ci.installation_date <= :cutoff_date"];
+$params = ['cutoff_date' => $cutoffDate];
+
+// Add search filter if provided
+if (!empty($searchTerm)) {
+    $whereConditions[] = "(le.legal_entity_name LIKE :search OR s.store_name LIKE :search2 OR ci.safr_code LIKE :search3)";
+    $params['search'] = "%$searchTerm%";
+    $params['search2'] = "%$searchTerm%";
+    $params['search3'] = "%$searchTerm%";
+}
+
+$whereClause = implode(' AND ', $whereConditions);
+
 // Get all uninvoiced cameras installed up to the cutoff date
 $uninvoicedCameras = $db->fetchAll(
     "SELECT
@@ -41,13 +58,13 @@ $uninvoicedCameras = $db->fetchAll(
      FROM camera_installations ci
      JOIN stores s ON ci.store_id = s.id
      JOIN legal_entities le ON s.legal_entity_id = le.id
-     WHERE ci.installation_date <= :cutoff_date
+     WHERE $whereClause
      AND ci.id NOT IN (
          SELECT camera_installation_id
          FROM invoice_camera_allocations
      )
      ORDER BY $sortOrder",
-    ['cutoff_date' => $cutoffDate]
+    $params
 );
 
 // Group cameras by legal entity for easy selection
@@ -81,13 +98,13 @@ require __DIR__ . '/../layouts/header.php';
         <form method="GET" style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
             <input type="hidden" name="page" value="invoices">
             <input type="hidden" name="action" value="generator">
-            
+
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cutoff Date:</label>
-                <input type="date" name="cutoff_date" value="<?= htmlspecialchars($cutoffDate) ?>" 
+                <input type="date" name="cutoff_date" value="<?= htmlspecialchars($cutoffDate) ?>"
                        style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
-            
+
             <div>
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Sort By:</label>
                 <select name="sort" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -95,9 +112,27 @@ require __DIR__ . '/../layouts/header.php';
                     <option value="install_date" <?= $sortBy === 'install_date' ? 'selected' : '' ?>>Installation Date</option>
                 </select>
             </div>
-            
+
+            <div style="flex: 1; min-width: 250px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Search:</label>
+                <input type="text"
+                       name="search"
+                       placeholder="Legal entity, store name, or SAFR code..."
+                       value="<?= htmlspecialchars($searchTerm) ?>"
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+
             <button type="submit" class="btn btn-primary">Apply Filters</button>
+            <?php if (!empty($searchTerm)): ?>
+                <a href="?page=invoices&action=generator&cutoff_date=<?= urlencode($cutoffDate) ?>&sort=<?= urlencode($sortBy) ?>" class="btn">Clear Search</a>
+            <?php endif; ?>
         </form>
+
+        <?php if (!empty($searchTerm)): ?>
+            <p style="margin: 15px 0 0 0; padding: 10px; background: #e3f2fd; border-radius: 4px; font-size: 0.9em;">
+                🔍 Searching for: <strong><?= htmlspecialchars($searchTerm) ?></strong>
+            </p>
+        <?php endif; ?>
     </div>
 
     <!-- Summary -->
