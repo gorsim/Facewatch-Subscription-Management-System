@@ -208,8 +208,8 @@ class CameraInstallationImporter {
             }
             if (!$store && !empty($storeName)) {
                 $store = $this->db->fetchOne(
-                    "SELECT * FROM stores WHERE store_name = :name OR REPLACE(REPLACE(store_name, '–', '-'), '—', '-') = REPLACE(REPLACE(:name, '–', '-'), '—', '-')",
-                    ['name' => $storeName]
+                    "SELECT * FROM stores WHERE store_name = :name1 OR REPLACE(REPLACE(store_name, '–', '-'), '—', '-') = REPLACE(REPLACE(:name2, '–', '-'), '—', '-')",
+                    ['name1' => $storeName, 'name2' => $storeName]
                 );
             }
 
