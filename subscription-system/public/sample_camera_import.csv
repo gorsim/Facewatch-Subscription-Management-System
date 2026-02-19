@@ -1,0 +1,10 @@
+Store ID,Store Name,Installation Date,Camera Name,SAFR Code,Camera Type,Removal Date,Invoice Number,Notes
+1,Tesco Express London,2024-01-15,Camera 1,SAFR-001,main,,,Initial installation
+1,Tesco Express London,2024-01-15,Camera 2,SAFR-002,additional,,,Initial installation
+2,Sainsbury's Manchester,2024-02-01,Camera 1,SAFR-003,main,,,Initial installation
+3,Waitrose Birmingham,2024-02-15,Camera 1,SAFR-004,main,,,Initial installation
+3,Waitrose Birmingham,2024-02-15,Camera 2,SAFR-005,additional,,,Initial installation
+4,Co-op Leeds,2024-03-01,Camera 1,SAFR-006,main,,,Initial installation
+,Tesco Express London,2024-06-30,,,main,2024-06-30,,Camera SAFR-001 removed from Tesco
+,Sainsbury's Manchester,2024-07-15,Camera 1,SAFR-001,main,,,Camera SAFR-001 moved to Sainsbury's
+
