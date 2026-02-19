@@ -38,6 +38,7 @@ if ($search) {
 
     if ($searchType === 'all' || $searchType === 'store') {
         // Search stores by name, ID, or address
+        $searchTerm = "%{$search}%";
         $storeResults = $db->fetchAll("
             SELECT
                 s.*,
@@ -49,17 +50,24 @@ if ($search) {
                  AND ci.removal_date IS NULL) as active_cameras
             FROM stores s
             JOIN legal_entities le ON s.legal_entity_id = le.id
-            WHERE s.store_name LIKE :term
-            OR s.store_id LIKE :term
-            OR s.store_code LIKE :term
-            OR s.city LIKE :term
-            OR s.postcode LIKE :term
+            WHERE s.store_name LIKE :term1
+            OR s.store_id LIKE :term2
+            OR s.store_code LIKE :term3
+            OR s.city LIKE :term4
+            OR s.postcode LIKE :term5
             ORDER BY s.store_name
-        ", ['term' => "%{$search}%"]);
+        ", [
+            'term1' => $searchTerm,
+            'term2' => $searchTerm,
+            'term3' => $searchTerm,
+            'term4' => $searchTerm,
+            'term5' => $searchTerm
+        ]);
     }
 
     if ($searchType === 'all' || $searchType === 'camera') {
         // Search cameras by SAFR code or camera name
+        $searchTerm = "%{$search}%";
         $cameraResults = $db->fetchAll("
             SELECT
                 ci.*,
@@ -70,11 +78,14 @@ if ($search) {
             FROM camera_installations ci
             JOIN stores s ON ci.store_id = s.id
             JOIN legal_entities le ON s.legal_entity_id = le.id
-            WHERE ci.safr_code LIKE :term
-            OR ci.camera_name LIKE :term
+            WHERE ci.safr_code LIKE :term1
+            OR ci.camera_name LIKE :term2
             ORDER BY ci.installation_date DESC
             LIMIT 100
-        ", ['term' => "%{$search}%"]);
+        ", [
+            'term1' => $searchTerm,
+            'term2' => $searchTerm
+        ]);
     }
 } else {
     // No search - show all legal entities
