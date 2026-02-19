@@ -21,6 +21,7 @@ class CameraInstallationImporter {
     private $db;
     private $errors = [];
     private $imported = 0;
+    private $updated = 0;
     private $skipped = 0;
     private $movementsDetected = 0;
     private $invoicesAutoUpdated = 0;
@@ -41,6 +42,7 @@ class CameraInstallationImporter {
     public function import($filePath) {
         $this->errors = [];
         $this->imported = 0;
+        $this->updated = 0;
         $this->skipped = 0;
         $this->movementsDetected = 0;
         $this->invoicesAutoUpdated = 0;
@@ -244,10 +246,12 @@ class CameraInstallationImporter {
             // Update existing camera instead of creating duplicate
             $this->db->update('camera_installations', $cameraData, 'id = :id', ['id' => $existingCamera['id']]);
             $installationId = $existingCamera['id'];
+            $this->updated++;
             error_log("CameraInstallationImporter: Updated existing camera {$safrCode} (ID: {$installationId})");
         } else {
             // Create new camera installation
             $installationId = $this->cameraInstallation->create($cameraData);
+            $this->imported++;
             error_log("CameraInstallationImporter: Created new camera {$safrCode} (ID: {$installationId})");
         }
 
@@ -276,8 +280,6 @@ class CameraInstallationImporter {
                 ];
             }
         }
-
-        $this->imported++;
     }
 
 
@@ -427,6 +429,10 @@ class CameraInstallationImporter {
 
     public function getImported() {
         return $this->imported;
+    }
+
+    public function getUpdated() {
+        return $this->updated;
     }
 
     public function getSkipped() {

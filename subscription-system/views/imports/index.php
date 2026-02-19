@@ -57,7 +57,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
                 $success = $importer->import($targetPath);
 
                 if ($success) {
-                    $message = "Successfully imported {$importer->getImported()} camera installations. Skipped {$importer->getSkipped()} duplicates.";
+                    $imported = $importer->getImported();
+                    $updated = $importer->getUpdated();
+
+                    if ($imported > 0 && $updated > 0) {
+                        $message = "Successfully added {$imported} new camera(s) and updated {$updated} existing camera(s).";
+                    } elseif ($imported > 0) {
+                        $message = "Successfully added {$imported} new camera(s).";
+                    } elseif ($updated > 0) {
+                        $message = "Successfully updated {$updated} existing camera(s).";
+                    } else {
+                        $message = "No changes made.";
+                    }
 
                     // Add movement detection info
                     if ($importer->getMovementsDetected() > 0) {
