@@ -220,8 +220,16 @@ class CameraInstallationImporter {
         $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : null;
         $notes = isset($columnMap['notes']) ? trim($row[$columnMap['notes']] ?? '') : null;
 
-        // Create camera installation
-        $installationId = $this->cameraInstallation->create([
+        // Check if camera with this SAFR code already exists
+        $existingCamera = null;
+        if (!empty($safrCode)) {
+            $existingCamera = $this->db->fetchOne(
+                "SELECT * FROM camera_installations WHERE safr_code = :safr_code ORDER BY id DESC LIMIT 1",
+                ['safr_code' => $safrCode]
+            );
+        }
+
+        $cameraData = [
             'store_id' => $store['id'],
             'installation_date' => $installationDate,
             'removal_date' => $removalDate,
@@ -230,7 +238,18 @@ class CameraInstallationImporter {
             'safr_code' => !empty($safrCode) ? $safrCode : null,
             'invoice_id' => $invoiceId,
             'notes' => !empty($notes) ? $notes : null,
-        ]);
+        ];
+
+        if ($existingCamera) {
+            // Update existing camera instead of creating duplicate
+            $this->db->update('camera_installations', $cameraData, 'id = :id', ['id' => $existingCamera['id']]);
+            $installationId = $existingCamera['id'];
+            error_log("CameraInstallationImporter: Updated existing camera {$safrCode} (ID: {$installationId})");
+        } else {
+            // Create new camera installation
+            $installationId = $this->cameraInstallation->create($cameraData);
+            error_log("CameraInstallationImporter: Created new camera {$safrCode} (ID: {$installationId})");
+        }
 
         // Track removals and installations for movement detection
         if (!empty($safrCode)) {
