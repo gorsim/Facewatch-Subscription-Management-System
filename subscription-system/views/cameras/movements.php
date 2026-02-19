@@ -13,6 +13,11 @@ $db = Database::getInstance();
 // Get filter parameters
 $status = $_GET['status'] ?? 'all';
 $requiresXero = isset($_GET['requires_xero']) ? (bool)$_GET['requires_xero'] : null;
+$importFilter = $_GET['import_filter'] ?? 'all';
+
+// Get the latest import session ID
+$latestImportId = $db->fetchOne("SELECT MAX(id) as latest_id FROM camera_installation_imports");
+$latestImportId = $latestImportId['latest_id'] ?? null;
 
 // Build query
 $sql = "
@@ -39,6 +44,12 @@ if ($requiresXero !== null) {
     } else {
         $sql .= " AND cm.issued_invoices_flagged = 0";
     }
+}
+
+// Filter by import session
+if ($importFilter === 'latest' && $latestImportId) {
+    $sql .= " AND cm.import_session_id = :import_session_id";
+    $params['import_session_id'] = $latestImportId;
 }
 
 $sql .= " GROUP BY cm.id ORDER BY cm.detected_at DESC";
@@ -132,6 +143,14 @@ require __DIR__ . '/../layouts/header.php';
                 <input type="hidden" name="action" value="movements">
 
                 <div class="col-md-3">
+                    <label class="form-label fw-bold">Import Session</label>
+                    <select name="import_filter" class="form-select">
+                        <option value="all" <?= $importFilter === 'all' ? 'selected' : '' ?>>All Imports</option>
+                        <option value="latest" <?= $importFilter === 'latest' ? 'selected' : '' ?>>Latest Import Only</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label fw-bold">Xero Status</label>
                     <select name="status" class="form-select">
                         <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>All</option>
@@ -151,7 +170,7 @@ require __DIR__ . '/../layouts/header.php';
                     </select>
                 </div>
 
-                <div class="col-md-6 d-flex align-items-end gap-2">
+                <div class="col-md-3 d-flex align-items-end gap-2">
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-funnel"></i> Apply Filters
                     </button>
@@ -166,13 +185,22 @@ require __DIR__ . '/../layouts/header.php';
     <!-- Movements Table -->
     <?php if (empty($movements)): ?>
         <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> No camera movements detected yet.
+            <i class="bi bi-info-circle"></i> No camera movements detected<?= $importFilter === 'latest' ? ' in the latest import' : '' ?>.
             <br><small>Camera movements are automatically detected when you upload incremental camera installation data with removal dates.</small>
         </div>
     <?php else: ?>
+        <?php if ($importFilter === 'latest'): ?>
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-funnel"></i> Showing movements from <strong>Latest Import Only</strong> (Import #<?= $latestImportId ?>)
+                <a href="?page=cameras&action=movements" class="ms-2">View All Imports</a>
+            </div>
+        <?php endif; ?>
         <div class="card">
             <div class="card-header">
                 <strong><?= count($movements) ?> Camera Movement(s) Detected</strong>
+                <?php if ($importFilter === 'latest'): ?>
+                    <small class="text-muted ms-2">(from latest import)</small>
+                <?php endif; ?>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
