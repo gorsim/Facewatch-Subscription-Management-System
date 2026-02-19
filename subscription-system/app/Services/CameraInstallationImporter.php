@@ -231,28 +231,49 @@ class CameraInstallationImporter {
             );
         }
 
-        $cameraData = [
-            'store_id' => $store['id'],
-            'installation_date' => $installationDate,
-            'removal_date' => $removalDate,
-            'camera_type' => $cameraType,
-            'camera_name' => !empty($cameraName) ? $cameraName : null,
-            'safr_code' => !empty($safrCode) ? $safrCode : null,
-            'invoice_id' => $invoiceId,
-            'notes' => !empty($notes) ? $notes : null,
-        ];
+        // Handle removal-only rows (no installation date)
+        if (empty($installationDate) && !empty($removalDate)) {
+            // This is a removal - must have existing camera
+            if (!$existingCamera) {
+                throw new \Exception("Cannot remove camera {$safrCode} - not found in database");
+            }
 
-        if ($existingCamera) {
-            // Update existing camera instead of creating duplicate
-            $this->db->update('camera_installations', $cameraData, 'id = :id', ['id' => $existingCamera['id']]);
+            // Update only the removal date and store
+            $this->db->update('camera_installations', [
+                'removal_date' => $removalDate,
+                'store_id' => $store['id'],
+                'notes' => !empty($notes) ? $notes : $existingCamera['notes']
+            ], 'id = :id', ['id' => $existingCamera['id']]);
+
             $installationId = $existingCamera['id'];
             $this->updated++;
-            error_log("CameraInstallationImporter: Updated existing camera {$safrCode} (ID: {$installationId})");
+            error_log("CameraInstallationImporter: Updated removal date for camera {$safrCode} (ID: {$installationId})");
+
         } else {
-            // Create new camera installation
-            $installationId = $this->cameraInstallation->create($cameraData);
-            $this->imported++;
-            error_log("CameraInstallationImporter: Created new camera {$safrCode} (ID: {$installationId})");
+            // This is an installation (with or without removal date)
+            $cameraData = [
+                'store_id' => $store['id'],
+                'installation_date' => $installationDate,
+                'removal_date' => $removalDate,
+                'camera_type' => $cameraType,
+                'camera_name' => !empty($cameraName) ? $cameraName : null,
+                'safr_code' => !empty($safrCode) ? $safrCode : null,
+                'invoice_id' => $invoiceId,
+                'notes' => !empty($notes) ? $notes : null,
+            ];
+
+            if ($existingCamera) {
+                // Update existing camera instead of creating duplicate
+                $this->db->update('camera_installations', $cameraData, 'id = :id', ['id' => $existingCamera['id']]);
+                $installationId = $existingCamera['id'];
+                $this->updated++;
+                error_log("CameraInstallationImporter: Updated existing camera {$safrCode} (ID: {$installationId})");
+            } else {
+                // Create new camera installation
+                $installationId = $this->cameraInstallation->create($cameraData);
+                $this->imported++;
+                error_log("CameraInstallationImporter: Created new camera {$safrCode} (ID: {$installationId})");
+            }
         }
 
         // Track removals and installations for movement detection
