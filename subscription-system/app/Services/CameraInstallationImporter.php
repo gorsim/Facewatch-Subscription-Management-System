@@ -31,6 +31,7 @@ class CameraInstallationImporter {
     // Track cameras being removed and installed in this import
     private $removals = []; // safr_code => removal data
     private $installations = []; // safr_code => installation data
+    private $duplicateRows = []; // Track duplicate rows for same camera/store to skip
 
     public function __construct() {
         $this->cameraInstallation = new CameraInstallation();
@@ -49,6 +50,7 @@ class CameraInstallationImporter {
         $this->invoicesFlaggedForXero = 0;
         $this->removals = [];
         $this->installations = [];
+        $this->duplicateRows = [];
 
         if (!file_exists($filePath)) {
             $this->errors[] = "File not found: {$filePath}";
@@ -230,6 +232,35 @@ class CameraInstallationImporter {
         $cameraName = isset($columnMap['camera_name']) ? trim($row[$columnMap['camera_name']] ?? '') : null;
         $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : null;
         $notes = isset($columnMap['notes']) ? trim($row[$columnMap['notes']] ?? '') : null;
+
+        // DUPLICATE ROW DETECTION: Check if we've already seen this camera at this store in this CSV
+        if (!empty($safrCode)) {
+            $rowKey = $safrCode . '_' . $store['id'];
+
+            // Check if this is a duplicate row (same camera, same store, conflicting data)
+            if (isset($this->duplicateRows[$rowKey])) {
+                $previousRow = $this->duplicateRows[$rowKey];
+
+                // If one row has installation and another has removal for SAME camera at SAME store
+                // This is contradictory data - skip the second row
+                if ((!empty($installationDate) && !empty($previousRow['removal_date'])) ||
+                    (!empty($removalDate) && !empty($previousRow['installation_date']))) {
+
+                    $this->skipped++;
+                    error_log("CameraInstallationImporter: Skipping duplicate/contradictory row for camera {$safrCode} at store {$store['store_name']} (line {$lineNumber})");
+                    error_log("  Previous row: install={$previousRow['installation_date']}, removal={$previousRow['removal_date']}");
+                    error_log("  Current row: install={$installationDate}, removal={$removalDate}");
+                    return; // Skip this contradictory row
+                }
+            }
+
+            // Track this row for duplicate detection
+            $this->duplicateRows[$rowKey] = [
+                'installation_date' => $installationDate,
+                'removal_date' => $removalDate,
+                'line_number' => $lineNumber
+            ];
+        }
 
         // Check if camera with this SAFR code already exists
         $existingCamera = null;
