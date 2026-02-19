@@ -74,14 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
 
                     // Add contra detection info
                     if (count($contras) > 0) {
-                        $message .= "<br><br><strong>⚠️ Contradictory Rows Detected (Contras): " . count($contras) . "</strong>";
-                        $message .= "<br><small class='text-muted'>The following cameras had conflicting installation/removal rows in the same CSV for the same store. Both rows were ignored to preserve the original database state:</small>";
+                        $message .= "<br><br><strong>ℹ️ Cameras Ignored: " . count($contras) . "</strong>";
+                        $message .= "<br><small class='text-muted'>These cameras were removed and re-added in the same store on the upload so have been ignored:</small>";
                         $message .= "<ul class='mt-2'>";
                         foreach ($contras as $contra) {
-                            $message .= "<li><strong>{$contra['safr_code']}</strong> at <strong>{$contra['store_name']}</strong> (lines: " . implode(', ', $contra['lines']) . ")</li>";
+                            $message .= "<li><strong>{$contra['safr_code']}</strong> at <strong>{$contra['store_name']}</strong></li>";
                         }
                         $message .= "</ul>";
-                        $message .= "<small class='text-info'><i class='bi bi-info-circle'></i> To update these cameras, upload a CSV with only one row per camera per store.</small>";
                     }
 
                     // Add movement detection info
