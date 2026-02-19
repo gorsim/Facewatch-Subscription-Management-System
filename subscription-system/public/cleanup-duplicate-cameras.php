@@ -45,30 +45,35 @@ try {
         
         // Update any invoice allocations pointing to old IDs to point to the new ID
         foreach ($deleteIds as $oldId) {
-            $updated = $db->query("
-                UPDATE invoice_camera_allocations 
-                SET camera_installation_id = :new_id 
+            $stmt = $db->query("
+                UPDATE invoice_camera_allocations
+                SET camera_installation_id = :new_id
                 WHERE camera_installation_id = :old_id
             ", [
                 'new_id' => $keepId,
                 'old_id' => $oldId
             ]);
-            
+
+            $updated = $stmt->rowCount();
+
             if ($updated > 0) {
                 echo "<li>Updated {$updated} invoice allocations from ID {$oldId} to {$keepId}</li>";
                 $totalUpdated += $updated;
             }
         }
-        
+
         // Delete the old camera records
-        $deleted = $db->query("
-            DELETE FROM camera_installations 
-            WHERE id IN (" . implode(',', $deleteIds) . ")
-        ");
-        
+        $placeholders = implode(',', array_fill(0, count($deleteIds), '?'));
+        $stmt = $db->query("
+            DELETE FROM camera_installations
+            WHERE id IN ({$placeholders})
+        ", $deleteIds);
+
+        $deleted = $stmt->rowCount();
+
         echo "<li>Deleted {$deleted} duplicate camera records</li>";
         echo "</ul>";
-        
+
         $totalDeleted += $deleted;
     }
     
