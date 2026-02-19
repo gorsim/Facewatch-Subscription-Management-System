@@ -104,6 +104,114 @@ if ($report === 'cashflow' && isset($_GET['export']) && $_GET['export'] === 'csv
     exit;
 }
 
+// Camera Report CSV Export
+if ($report === 'cameras' && isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $db = Database::getInstance();
+
+    // Get selected date or default to today
+    $selectedDate = $_GET['snapshot_date'] ?? date('Y-m-d');
+
+    // Get filter values
+    $filterLegalEntity = $_GET['filter_legal_entity'] ?? '';
+    $filterCameraType = $_GET['filter_camera_type'] ?? '';
+    $filterStatus = $_GET['filter_status'] ?? 'active';
+    $searchTerm = $_GET['search'] ?? '';
+
+    // Build WHERE conditions (same as display logic)
+    $whereConditions = ["ci.installation_date <= :snapshot_date"];
+    $params = ['snapshot_date' => $selectedDate];
+
+    // Status filter
+    if ($filterStatus === 'active') {
+        $whereConditions[] = "(ci.removal_date IS NULL OR ci.removal_date > :snapshot_date2)";
+        $params['snapshot_date2'] = $selectedDate;
+    } elseif ($filterStatus === 'removed') {
+        $whereConditions[] = "ci.removal_date IS NOT NULL AND ci.removal_date <= :snapshot_date3";
+        $params['snapshot_date3'] = $selectedDate;
+    }
+
+    // Legal entity filter
+    if ($filterLegalEntity) {
+        $whereConditions[] = "le.id = :legal_entity_id";
+        $params['legal_entity_id'] = $filterLegalEntity;
+    }
+
+    // Camera type filter
+    if ($filterCameraType) {
+        $whereConditions[] = "ci.camera_type = :camera_type";
+        $params['camera_type'] = $filterCameraType;
+    }
+
+    // Search filter
+    if ($searchTerm) {
+        $whereConditions[] = "(st.store_name LIKE :search OR ci.camera_name LIKE :search2 OR ci.safr_code LIKE :search3)";
+        $params['search'] = '%' . $searchTerm . '%';
+        $params['search2'] = '%' . $searchTerm . '%';
+        $params['search3'] = '%' . $searchTerm . '%';
+    }
+
+    $whereClause = implode(' AND ', $whereConditions);
+
+    // Get all cameras
+    $cameras = $db->fetchAll("
+        SELECT
+            ci.id as camera_id,
+            ci.camera_name,
+            ci.safr_code,
+            ci.camera_type,
+            ci.installation_date,
+            ci.removal_date,
+            st.id as store_internal_id,
+            st.store_name,
+            st.store_id,
+            le.legal_entity_name,
+            le.id as legal_entity_id
+        FROM camera_installations ci
+        JOIN stores st ON ci.store_id = st.id
+        JOIN legal_entities le ON st.legal_entity_id = le.id
+        WHERE $whereClause
+        ORDER BY le.legal_entity_name, st.store_name, ci.installation_date
+    ", $params);
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="camera_inventory_' . $selectedDate . '.csv"');
+
+    $output = fopen('php://output', 'w');
+
+    // CSV headers
+    fputcsv($output, [
+        'Legal Entity',
+        'Store Name',
+        'Store ID',
+        'Camera Name',
+        'SAFR Code',
+        'Type',
+        'Installation Date',
+        'Removal Date',
+        'Status'
+    ]);
+
+    // Data rows
+    foreach ($cameras as $camera) {
+        $isActive = empty($camera['removal_date']) || strtotime($camera['removal_date']) > strtotime($selectedDate);
+
+        fputcsv($output, [
+            $camera['legal_entity_name'],
+            $camera['store_name'],
+            $camera['store_id'],
+            $camera['camera_name'] ?: '-',
+            $camera['safr_code'] ?: '-',
+            ucfirst($camera['camera_type']),
+            date('d/m/Y', strtotime($camera['installation_date'])),
+            $camera['removal_date'] ? date('d/m/Y', strtotime($camera['removal_date'])) : '-',
+            $isActive ? 'Active' : 'Removed'
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+
 // Revenue Forecast CSV Export
 if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv') {
     $db = Database::getInstance();
@@ -553,6 +661,23 @@ require __DIR__ . '/../layouts/header.php';
             <div style="display: flex; gap: 10px;">
                 <button type="submit" class="btn btn-primary">Apply Filters</button>
                 <a href="?page=reports&report=cameras" class="btn">Clear Filters</a>
+                <?php
+                // Build export URL with all current filters
+                $exportParams = [
+                    'page' => 'reports',
+                    'report' => 'cameras',
+                    'export' => 'csv',
+                    'snapshot_date' => $selectedDate
+                ];
+                if ($filterLegalEntity) $exportParams['filter_legal_entity'] = $filterLegalEntity;
+                if ($filterCameraType) $exportParams['filter_camera_type'] = $filterCameraType;
+                if ($filterStatus) $exportParams['filter_status'] = $filterStatus;
+                if ($searchTerm) $exportParams['search'] = $searchTerm;
+                $exportUrl = '?' . http_build_query($exportParams);
+                ?>
+                <a href="<?= $exportUrl ?>" class="btn btn-success">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+                </a>
             </div>
         </form>
 
