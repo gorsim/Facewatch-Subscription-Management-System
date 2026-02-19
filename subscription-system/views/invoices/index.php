@@ -197,16 +197,16 @@ require __DIR__ . '/../layouts/header.php';
         <h2>Invoices (<?= count($invoices) ?>)</h2>
         <div style="display: flex; gap: 10px;">
             <?php if ($dueForecasts > 0): ?>
-            <a href="convert_forecasts.php" class="btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; animation: pulse 2s infinite;">
+            <a href="convert_forecasts.php" class="btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; border: none; animation: pulse 2s infinite;" title="Converting forecasts that are now in the past to draft invoices">
                 🔄 Convert <?= $dueForecasts ?> Due Forecast<?= $dueForecasts != 1 ? 's' : '' ?>
             </a>
             <?php else: ?>
-            <a href="convert_forecasts.php" class="btn" style="background: #6c757d; color: white; border: none;">
-                🔄 Convert Forecasts
+            <a href="convert_forecasts.php" class="btn" style="background: #6c757d; color: white; border: none;" title="Converting forecasts that are now in the past to draft invoices">
+                🔄 Convert fcst invs to Draft
             </a>
             <?php endif; ?>
             <a href="?page=invoices&action=smart_match" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
-                🤖 Smart Match Invoices
+                🤖 Reconcile to Xero
             </a>
             <a href="?page=invoices&action=recalculate_all"
                class="btn <?= $needsRecalculate ? 'btn-recalculate-needed' : 'btn-recalculate-normal' ?>"
@@ -214,7 +214,6 @@ require __DIR__ . '/../layouts/header.php';
                 <?= $needsRecalculate ? '⚠️ ' : '🔄 ' ?>Recalculate All & Generate Forecasts<?= $needsRecalculate ? ' (Action Needed!)' : '' ?>
             </a>
             <a href="?page=invoices&action=bulk_status_update" class="btn btn-info">✅ Bulk Mark as Issued</a>
-            <a href="?page=invoices&action=bulk_reconcile" class="btn btn-success">🔄 Bulk Reconcile to Xero</a>
             <a href="?page=invoices&action=reset_all" class="btn btn-danger">🗑️ Reset All Invoices</a>
         </div>
     </div>

@@ -6,7 +6,7 @@
 use App\Database;
 use App\Services\InvoiceMatchingService;
 
-$pageTitle = 'Smart Invoice Matching';
+$pageTitle = 'Reconciliation of Invoices to Xero';
 $page = 'invoices';
 
 $db = Database::getInstance();
@@ -197,8 +197,11 @@ require __DIR__ . '/../layouts/header.php';
 
 <div class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h1>🤖 Smart Invoice Matching</h1>
-        <a href="?page=invoices" class="btn">← Back to Invoices</a>
+        <h1>🤖 Reconciliation of Invoices to Xero</h1>
+        <div style="display: flex; gap: 10px;">
+            <a href="?page=invoices&action=bulk_reconcile" class="btn btn-success">🔄 Bulk Reconcile to Xero</a>
+            <a href="?page=invoices" class="btn">← Back to Invoices</a>
+        </div>
     </div>
 
     <?php if (isset($_SESSION['error'])): ?>
