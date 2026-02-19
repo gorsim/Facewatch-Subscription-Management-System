@@ -182,10 +182,19 @@ class CameraInstallationImporter {
             $store = $this->store->findByStoreId($storeId);
         }
         if (!$store && !empty($storeName)) {
+            // Try exact match first
             $store = $this->db->fetchOne(
                 "SELECT * FROM stores WHERE store_name = :name",
                 ['name' => $storeName]
             );
+
+            // If not found, try fuzzy match (handles special characters)
+            if (!$store) {
+                $store = $this->db->fetchOne(
+                    "SELECT * FROM stores WHERE REPLACE(REPLACE(store_name, '–', '-'), '—', '-') = REPLACE(REPLACE(:name, '–', '-'), '—', '-')",
+                    ['name' => $storeName]
+                );
+            }
         }
 
         if (!$store) {
@@ -233,9 +242,12 @@ class CameraInstallationImporter {
 
         // Handle removal-only rows (no installation date)
         if (empty($installationDate) && !empty($removalDate)) {
-            // This is a removal - must have existing camera
+            // This is a removal - camera should exist
             if (!$existingCamera) {
-                throw new \Exception("Cannot remove camera {$safrCode} - not found in database");
+                // Camera not found - skip this row with a warning
+                $this->skipped++;
+                error_log("CameraInstallationImporter: Skipping removal for camera {$safrCode} - not found in database");
+                return; // Skip this row
             }
 
             // Update only the removal date and store
@@ -337,7 +349,7 @@ class CameraInstallationImporter {
                     SELECT DISTINCT
                         i.id,
                         i.invoice_number,
-                        i.status,
+                        i.invoice_status,
                         i.invoice_date,
                         ica.store_id as allocated_store_id,
                         s.store_name as allocated_store_name
@@ -346,7 +358,7 @@ class CameraInstallationImporter {
                     JOIN stores s ON ica.store_id = s.id
                     WHERE ica.store_id = :from_store_id
                     AND i.invoice_date <= :removal_date
-                    ORDER BY i.status, i.invoice_date
+                    ORDER BY i.invoice_status, i.invoice_date
                 ", [
                     'from_store_id' => $removal['store_id'],
                     'removal_date' => $removal['removal_date']
@@ -360,7 +372,7 @@ class CameraInstallationImporter {
                     $affectedCount++;
 
                     // Determine action based on invoice status
-                    if ($invoice['status'] === 'draft') {
+                    if ($invoice['invoice_status'] === 'draft') {
                         // Auto-update draft invoices
                         $this->db->update('invoice_camera_allocations', [
                             'store_id' => $installation['store_id']
@@ -387,7 +399,7 @@ class CameraInstallationImporter {
                         'camera_movement_id' => $movementId,
                         'invoice_id' => $invoice['id'],
                         'invoice_number' => $invoice['invoice_number'],
-                        'invoice_status' => $invoice['status'],
+                        'invoice_status' => $invoice['invoice_status'],
                         'invoice_date' => $invoice['invoice_date'],
                         'old_store_id' => $removal['store_id'],
                         'old_store_name' => $removal['store_name'],
