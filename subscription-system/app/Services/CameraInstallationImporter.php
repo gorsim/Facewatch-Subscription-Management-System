@@ -160,14 +160,18 @@ class CameraInstallationImporter {
         $storeId = isset($columnMap['store_id']) ? trim($row[$columnMap['store_id']] ?? '') : '';
         $storeName = isset($columnMap['store_name']) ? trim($row[$columnMap['store_name']] ?? '') : '';
         $installationDate = isset($columnMap['installation_date']) ? trim($row[$columnMap['installation_date']] ?? '') : '';
+        $removalDateRaw = isset($columnMap['removal_date']) ? trim($row[$columnMap['removal_date']] ?? '') : '';
         $cameraType = isset($columnMap['camera_type']) ? trim($row[$columnMap['camera_type']] ?? 'main') : 'main';
 
         // Debug logging
-        error_log("CameraInstallationImporter Line {$lineNumber}: StoreID={$storeId}, StoreName={$storeName}, Date={$installationDate}, Type={$cameraType}");
+        error_log("CameraInstallationImporter Line {$lineNumber}: StoreID={$storeId}, StoreName={$storeName}, InstallDate={$installationDate}, RemovalDate={$removalDateRaw}, Type={$cameraType}");
 
-        // Validate required fields
-        if ((empty($storeId) && empty($storeName)) || empty($installationDate)) {
-            throw new \Exception("Missing required fields (Store ID/Name or Installation Date)");
+        // Validate required fields - need store AND at least one date (installation OR removal)
+        if (empty($storeId) && empty($storeName)) {
+            throw new \Exception("Missing required field: Store ID or Store Name");
+        }
+        if (empty($installationDate) && empty($removalDateRaw)) {
+            throw new \Exception("Missing required field: Installation Date or Removal Date");
         }
 
         // Find store by ID or Name
@@ -193,8 +197,8 @@ class CameraInstallationImporter {
         }
 
         // Parse dates
-        $installationDate = $this->parseDate($installationDate);
-        $removalDate = isset($columnMap['removal_date']) ? $this->parseDate($row[$columnMap['removal_date']] ?? null) : null;
+        $installationDate = !empty($installationDate) ? $this->parseDate($installationDate) : null;
+        $removalDate = !empty($removalDateRaw) ? $this->parseDate($removalDateRaw) : null;
 
         // Find invoice if invoice number provided
         $invoiceId = null;
