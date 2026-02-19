@@ -87,13 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <button type="submit" class="btn">Login</button>
         </form>
-        
-        <div class="default-creds">
-            <strong>Default Login:</strong>
-            Username: admin<br>
-            Password: changeme123<br>
-            <em>(Change password after first login)</em>
-        </div>
     </div>
 </body>
 </html>
