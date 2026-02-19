@@ -74,13 +74,29 @@ class CameraInstallationImporter {
         // Map headers to column indexes
         $columnMap = $this->mapColumns($headers);
 
+        // PHASE 0: Pre-scan CSV to detect contradictory rows (contras)
+        $allRows = [];
+        $lineNumber = 1;
+        while (($row = fgetcsv($handle)) !== false) {
+            $lineNumber++;
+            $allRows[] = ['data' => $row, 'line' => $lineNumber];
+        }
+
+        // Detect contras before processing
+        $this->detectContradictoryRows($allRows, $columnMap);
+
+        // Reset file pointer for actual import
+        rewind($handle);
+        fgetcsv($handle); // Skip header again
+
         $lineNumber = 1;
         $this->db->beginTransaction();
 
         try {
-            // PHASE 1: Import all rows and collect removal/installation data
-            while (($row = fgetcsv($handle)) !== false) {
-                $lineNumber++;
+            // PHASE 1: Import all rows (skipping contras)
+            foreach ($allRows as $rowData) {
+                $row = $rowData['data'];
+                $lineNumber = $rowData['line'];
 
                 try {
                     $this->importRow($row, $columnMap, $lineNumber);
@@ -159,6 +175,106 @@ class CameraInstallationImporter {
         return $map;
     }
 
+    /**
+     * Pre-scan CSV to detect contradictory rows (contras)
+     * A contra is when the same camera at the same store has:
+     * - One row with installation date
+     * - Another row with removal date
+     * Both rows should be skipped to preserve the original database state
+     */
+    private function detectContradictoryRows($allRows, $columnMap) {
+        $cameraRows = []; // Track rows by camera+store
+
+        foreach ($allRows as $rowData) {
+            $row = $rowData['data'];
+            $lineNumber = $rowData['line'];
+
+            // Extract key fields
+            $storeId = isset($columnMap['store_id']) ? trim($row[$columnMap['store_id']] ?? '') : '';
+            $storeName = isset($columnMap['store_name']) ? trim($row[$columnMap['store_name']] ?? '') : '';
+            $installationDate = isset($columnMap['installation_date']) ? trim($row[$columnMap['installation_date']] ?? '') : '';
+            $removalDate = isset($columnMap['removal_date']) ? trim($row[$columnMap['removal_date']] ?? '') : '';
+            $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : '';
+
+            // Skip rows without SAFR code or store
+            if (empty($safrCode) || (empty($storeId) && empty($storeName))) {
+                continue;
+            }
+
+            // Find store to get consistent ID
+            $store = null;
+            if (!empty($storeId)) {
+                $store = $this->store->findByStoreId($storeId);
+            }
+            if (!$store && !empty($storeName)) {
+                $store = $this->db->fetchOne(
+                    "SELECT * FROM stores WHERE store_name = :name OR REPLACE(REPLACE(store_name, '–', '-'), '—', '-') = REPLACE(REPLACE(:name, '–', '-'), '—', '-')",
+                    ['name' => $storeName]
+                );
+            }
+
+            if (!$store) {
+                continue; // Can't determine store, skip
+            }
+
+            $key = $safrCode . '_' . $store['id'];
+
+            if (!isset($cameraRows[$key])) {
+                $cameraRows[$key] = [];
+            }
+
+            $cameraRows[$key][] = [
+                'line' => $lineNumber,
+                'installation_date' => $installationDate,
+                'removal_date' => $removalDate,
+                'store_name' => $store['store_name']
+            ];
+        }
+
+        // Now check for contras
+        foreach ($cameraRows as $key => $rows) {
+            if (count($rows) < 2) {
+                continue; // No duplicates
+            }
+
+            // Check if we have contradictory rows
+            $hasInstallation = false;
+            $hasRemoval = false;
+            $installLine = null;
+            $removalLine = null;
+
+            foreach ($rows as $rowInfo) {
+                if (!empty($rowInfo['installation_date']) && empty($rowInfo['removal_date'])) {
+                    $hasInstallation = true;
+                    $installLine = $rowInfo['line'];
+                }
+                if (empty($rowInfo['installation_date']) && !empty($rowInfo['removal_date'])) {
+                    $hasRemoval = true;
+                    $removalLine = $rowInfo['line'];
+                }
+            }
+
+            // If we have both installation and removal rows for same camera/store = CONTRA
+            if ($hasInstallation && $hasRemoval) {
+                list($safrCode, $storeId) = explode('_', $key);
+                $storeName = $rows[0]['store_name'];
+
+                // Mark both lines as skipped
+                $this->duplicateRows[$key] = [
+                    'is_contra' => true,
+                    'lines' => [$installLine, $removalLine],
+                    'safr_code' => $safrCode,
+                    'store_name' => $storeName
+                ];
+
+                error_log("CameraInstallationImporter: CONTRA DETECTED for camera {$safrCode} at {$storeName}");
+                error_log("  Line {$installLine}: Installation row");
+                error_log("  Line {$removalLine}: Removal row");
+                error_log("  Both rows will be skipped - original database state preserved");
+            }
+        }
+    }
+
     private function importRow($row, $columnMap, $lineNumber) {
         // Extract data
         $storeId = isset($columnMap['store_id']) ? trim($row[$columnMap['store_id']] ?? '') : '';
@@ -166,9 +282,22 @@ class CameraInstallationImporter {
         $installationDate = isset($columnMap['installation_date']) ? trim($row[$columnMap['installation_date']] ?? '') : '';
         $removalDateRaw = isset($columnMap['removal_date']) ? trim($row[$columnMap['removal_date']] ?? '') : '';
         $cameraType = isset($columnMap['camera_type']) ? trim($row[$columnMap['camera_type']] ?? 'main') : 'main';
+        $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : null;
 
         // Debug logging
         error_log("CameraInstallationImporter Line {$lineNumber}: StoreID={$storeId}, StoreName={$storeName}, InstallDate={$installationDate}, RemovalDate={$removalDateRaw}, Type={$cameraType}");
+
+        // Check if this line is part of a contra and should be skipped
+        if (!empty($safrCode)) {
+            foreach ($this->duplicateRows as $key => $contraInfo) {
+                if (isset($contraInfo['is_contra']) && $contraInfo['is_contra'] &&
+                    in_array($lineNumber, $contraInfo['lines'])) {
+                    $this->skipped++;
+                    error_log("CameraInstallationImporter: Skipping line {$lineNumber} - part of CONTRA for camera {$safrCode}");
+                    return; // Skip this row
+                }
+            }
+        }
 
         // Validate required fields - need store AND at least one date (installation OR removal)
         if (empty($storeId) && empty($storeName)) {
@@ -230,37 +359,7 @@ class CameraInstallationImporter {
 
         // Extract optional fields
         $cameraName = isset($columnMap['camera_name']) ? trim($row[$columnMap['camera_name']] ?? '') : null;
-        $safrCode = isset($columnMap['safr_code']) ? trim($row[$columnMap['safr_code']] ?? '') : null;
         $notes = isset($columnMap['notes']) ? trim($row[$columnMap['notes']] ?? '') : null;
-
-        // DUPLICATE ROW DETECTION: Check if we've already seen this camera at this store in this CSV
-        if (!empty($safrCode)) {
-            $rowKey = $safrCode . '_' . $store['id'];
-
-            // Check if this is a duplicate row (same camera, same store, conflicting data)
-            if (isset($this->duplicateRows[$rowKey])) {
-                $previousRow = $this->duplicateRows[$rowKey];
-
-                // If one row has installation and another has removal for SAME camera at SAME store
-                // This is contradictory data - skip the second row
-                if ((!empty($installationDate) && !empty($previousRow['removal_date'])) ||
-                    (!empty($removalDate) && !empty($previousRow['installation_date']))) {
-
-                    $this->skipped++;
-                    error_log("CameraInstallationImporter: Skipping duplicate/contradictory row for camera {$safrCode} at store {$store['store_name']} (line {$lineNumber})");
-                    error_log("  Previous row: install={$previousRow['installation_date']}, removal={$previousRow['removal_date']}");
-                    error_log("  Current row: install={$installationDate}, removal={$removalDate}");
-                    return; // Skip this contradictory row
-                }
-            }
-
-            // Track this row for duplicate detection
-            $this->duplicateRows[$rowKey] = [
-                'installation_date' => $installationDate,
-                'removal_date' => $removalDate,
-                'line_number' => $lineNumber
-            ];
-        }
 
         // Check if camera with this SAFR code already exists
         $existingCamera = null;
@@ -566,6 +665,16 @@ class CameraInstallationImporter {
 
     public function getInvoicesFlaggedForXero() {
         return $this->invoicesFlaggedForXero;
+    }
+
+    public function getContras() {
+        $contras = [];
+        foreach ($this->duplicateRows as $key => $info) {
+            if (isset($info['is_contra']) && $info['is_contra']) {
+                $contras[] = $info;
+            }
+        }
+        return $contras;
     }
 }
 
