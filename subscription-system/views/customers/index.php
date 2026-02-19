@@ -6,24 +6,82 @@
 
 use App\Models\LegalEntity;
 use App\Services\PricingService;
+use App\Models\Store;
+use App\Models\CameraInstallation;
+use App\Database;
 
 $pageTitle = 'Legal Entities';
 $page = 'subscribers';
 
 $legalEntityModel = new LegalEntity();
 $pricingService = new PricingService();
+$storeModel = new Store();
+$cameraModel = new CameraInstallation();
+$db = Database::getInstance();
+
 $search = $_GET['search'] ?? '';
+$searchType = $_GET['search_type'] ?? 'all'; // all, entity, store, camera
+
+// Initialize results
+$legalEntities = [];
+$storeResults = [];
+$cameraResults = [];
+$searchPerformed = false;
 
 if ($search) {
-    $legalEntities = $legalEntityModel->search($search);
+    $searchPerformed = true;
+
+    // Search based on type
+    if ($searchType === 'all' || $searchType === 'entity') {
+        $legalEntities = $legalEntityModel->search($search);
+    }
+
+    if ($searchType === 'all' || $searchType === 'store') {
+        // Search stores by name, ID, or address
+        $storeResults = $db->fetchAll("
+            SELECT
+                s.*,
+                le.legal_entity_name,
+                le.legal_entity_id,
+                (SELECT COUNT(*)
+                 FROM camera_installations ci
+                 WHERE ci.store_id = s.id
+                 AND ci.removal_date IS NULL) as active_cameras
+            FROM stores s
+            JOIN legal_entities le ON s.legal_entity_id = le.id
+            WHERE s.store_name LIKE :term
+            OR s.store_id LIKE :term
+            OR s.store_code LIKE :term
+            OR s.city LIKE :term
+            OR s.postcode LIKE :term
+            ORDER BY s.store_name
+        ", ['term' => "%{$search}%"]);
+    }
+
+    if ($searchType === 'all' || $searchType === 'camera') {
+        // Search cameras by SAFR code or camera name
+        $cameraResults = $db->fetchAll("
+            SELECT
+                ci.*,
+                s.store_name,
+                s.store_id,
+                le.legal_entity_name,
+                le.legal_entity_id
+            FROM camera_installations ci
+            JOIN stores s ON ci.store_id = s.id
+            JOIN legal_entities le ON s.legal_entity_id = le.id
+            WHERE ci.safr_code LIKE :term
+            OR ci.camera_name LIKE :term
+            ORDER BY ci.installation_date DESC
+            LIMIT 100
+        ", ['term' => "%{$search}%"]);
+    }
 } else {
+    // No search - show all legal entities
     $legalEntities = $legalEntityModel->getAllWithContracts();
 }
 
 // Calculate totals
-use App\Database;
-$db = Database::getInstance();
-
 $totalLegalEntities = count($legalEntities);
 
 $totalStores = $db->fetchOne("SELECT COUNT(*) as count FROM stores");
@@ -65,8 +123,14 @@ require __DIR__ . '/../layouts/header.php';
 
     <form method="GET" style="margin-bottom: 20px;">
         <input type="hidden" name="page" value="subscribers">
-        <div style="display: flex; gap: 10px;">
-            <input type="text" name="search" placeholder="Search by name, ID, or lookup code..."
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <select name="search_type" style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 150px;">
+                <option value="all" <?= $searchType === 'all' ? 'selected' : '' ?>>🔍 Search All</option>
+                <option value="entity" <?= $searchType === 'entity' ? 'selected' : '' ?>>🏢 Legal Entities</option>
+                <option value="store" <?= $searchType === 'store' ? 'selected' : '' ?>>🏪 Stores/Properties</option>
+                <option value="camera" <?= $searchType === 'camera' ? 'selected' : '' ?>>📹 Cameras</option>
+            </select>
+            <input type="text" name="search" placeholder="Search by name, ID, SAFR code, address..."
                    value="<?= htmlspecialchars($search) ?>"
                    style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
             <button type="submit" class="btn">Search</button>
@@ -74,11 +138,108 @@ require __DIR__ . '/../layouts/header.php';
                 <a href="?page=subscribers" class="btn">Clear</a>
             <?php endif; ?>
         </div>
+        <?php if ($searchType === 'store'): ?>
+            <p style="margin: 0; font-size: 13px; color: #666;">💡 Tip: Search by store name, store ID, store code, city, or postcode</p>
+        <?php elseif ($searchType === 'camera'): ?>
+            <p style="margin: 0; font-size: 13px; color: #666;">💡 Tip: Search by SAFR code (e.g., "CA1A4D") or camera name</p>
+        <?php endif; ?>
     </form>
 
-    <?php if (empty($legalEntities)): ?>
+    <!-- Store Search Results -->
+    <?php if ($searchPerformed && !empty($storeResults)): ?>
+        <div style="margin-bottom: 30px;">
+            <h3 style="color: #f5576c; margin-bottom: 15px;">🏪 Store Results (<?= count($storeResults) ?>)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Store ID</th>
+                        <th>Store Name</th>
+                        <th>Legal Entity</th>
+                        <th>City</th>
+                        <th>Postcode</th>
+                        <th>Active Cameras</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($storeResults as $store): ?>
+                    <tr>
+                        <td><strong><?= htmlspecialchars($store['store_id']) ?></strong></td>
+                        <td><?= htmlspecialchars($store['store_name']) ?></td>
+                        <td>
+                            <a href="?page=subscribers&action=view&id=<?= $store['legal_entity_id'] ?>">
+                                <?= htmlspecialchars($store['legal_entity_name']) ?>
+                            </a>
+                        </td>
+                        <td><?= htmlspecialchars($store['city'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($store['postcode'] ?? '-') ?></td>
+                        <td><?= number_format($store['active_cameras']) ?></td>
+                        <td>
+                            <a href="?page=stores&action=view&id=<?= $store['id'] ?>" class="btn" style="padding: 5px 10px; font-size: 12px;">View Store</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+
+    <!-- Camera Search Results -->
+    <?php if ($searchPerformed && !empty($cameraResults)): ?>
+        <div style="margin-bottom: 30px;">
+            <h3 style="color: #4facfe; margin-bottom: 15px;">📹 Camera Results (<?= count($cameraResults) ?>)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>SAFR Code</th>
+                        <th>Camera Name</th>
+                        <th>Store</th>
+                        <th>Legal Entity</th>
+                        <th>Installation Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($cameraResults as $camera): ?>
+                    <tr>
+                        <td><strong><?= htmlspecialchars($camera['safr_code'] ?? '-') ?></strong></td>
+                        <td><?= htmlspecialchars($camera['camera_name'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($camera['store_name']) ?></td>
+                        <td>
+                            <a href="?page=subscribers&action=view&id=<?= $camera['legal_entity_id'] ?>">
+                                <?= htmlspecialchars($camera['legal_entity_name']) ?>
+                            </a>
+                        </td>
+                        <td><?= $camera['installation_date'] ? date('d/m/Y', strtotime($camera['installation_date'])) : '-' ?></td>
+                        <td>
+                            <?php if ($camera['removal_date']): ?>
+                                <span style="background: #f8d7da; color: #721c24; padding: 3px 8px; border-radius: 3px; font-size: 11px;">
+                                    ❌ Removed <?= date('d/m/Y', strtotime($camera['removal_date'])) ?>
+                                </span>
+                            <?php else: ?>
+                                <span style="background: #d4edda; color: #155724; padding: 3px 8px; border-radius: 3px; font-size: 11px;">
+                                    ✅ Active
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <a href="?page=subscribers&action=view&id=<?= $camera['legal_entity_id'] ?>" class="btn" style="padding: 5px 10px; font-size: 12px;">View Entity</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+
+    <!-- Legal Entity Results -->
+    <?php if (empty($legalEntities) && ($searchType === 'all' || $searchType === 'entity')): ?>
         <p>No legal entities found. <?php if ($search): ?>Try a different search term or <?php endif; ?><a href="?page=import&type=xero">import from Xero</a>.</p>
-    <?php else: ?>
+    <?php elseif (!empty($legalEntities)): ?>
+        <?php if ($searchPerformed && ($searchType === 'all' || $searchType === 'entity')): ?>
+            <h3 style="color: #667eea; margin-bottom: 15px;">🏢 Legal Entity Results (<?= count($legalEntities) ?>)</h3>
+        <?php endif; ?>
         <table>
             <thead>
                 <tr>
