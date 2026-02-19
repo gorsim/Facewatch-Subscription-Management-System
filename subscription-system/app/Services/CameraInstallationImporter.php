@@ -263,25 +263,53 @@ class CameraInstallationImporter {
 
         } else {
             // This is an installation (with or without removal date)
-            $cameraData = [
-                'store_id' => $store['id'],
-                'installation_date' => $installationDate,
-                'removal_date' => $removalDate,
-                'camera_type' => $cameraType,
-                'camera_name' => !empty($cameraName) ? $cameraName : null,
-                'safr_code' => !empty($safrCode) ? $safrCode : null,
-                'invoice_id' => $invoiceId,
-                'notes' => !empty($notes) ? $notes : null,
-            ];
 
             if ($existingCamera) {
-                // Update existing camera instead of creating duplicate
-                $this->db->update('camera_installations', $cameraData, 'id = :id', ['id' => $existingCamera['id']]);
+                // Update existing camera
+                $updateData = [
+                    'store_id' => $store['id'],
+                    'camera_type' => $cameraType,
+                    'camera_name' => !empty($cameraName) ? $cameraName : $existingCamera['camera_name'],
+                    'invoice_id' => $invoiceId,
+                    'notes' => !empty($notes) ? $notes : $existingCamera['notes'],
+                ];
+
+                // Handle installation date logic:
+                // - If camera was previously removed and is being re-installed, keep original installation_date
+                // - If this is a brand new installation date, update it
+                if (!empty($existingCamera['removal_date'])) {
+                    // Camera was removed - this is a re-installation
+                    // Keep the original installation_date, clear the removal_date
+                    $updateData['removal_date'] = NULL;
+                    error_log("CameraInstallationImporter: Re-installing camera {$safrCode} - clearing removal date");
+                } else {
+                    // Camera was never removed - update installation date if provided
+                    $updateData['installation_date'] = $installationDate;
+                }
+
+                // If this row explicitly provides a removal date, set it
+                if (!empty($removalDate)) {
+                    $updateData['removal_date'] = $removalDate;
+                }
+
+                $this->db->update('camera_installations', $updateData, 'id = :id', ['id' => $existingCamera['id']]);
                 $installationId = $existingCamera['id'];
                 $this->updated++;
                 error_log("CameraInstallationImporter: Updated existing camera {$safrCode} (ID: {$installationId})");
+
             } else {
                 // Create new camera installation
+                $cameraData = [
+                    'store_id' => $store['id'],
+                    'installation_date' => $installationDate,
+                    'removal_date' => $removalDate,
+                    'camera_type' => $cameraType,
+                    'camera_name' => !empty($cameraName) ? $cameraName : null,
+                    'safr_code' => !empty($safrCode) ? $safrCode : null,
+                    'invoice_id' => $invoiceId,
+                    'notes' => !empty($notes) ? $notes : null,
+                ];
+
                 $installationId = $this->cameraInstallation->create($cameraData);
                 $this->imported++;
                 error_log("CameraInstallationImporter: Created new camera {$safrCode} (ID: {$installationId})");
