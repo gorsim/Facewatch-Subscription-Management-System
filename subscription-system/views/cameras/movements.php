@@ -13,7 +13,7 @@ $db = Database::getInstance();
 // Get filter parameters
 $status = $_GET['status'] ?? 'all';
 $requiresXero = isset($_GET['requires_xero']) ? (bool)$_GET['requires_xero'] : null;
-$importFilter = $_GET['import_filter'] ?? 'all';
+$importFilter = $_GET['import_filter'] ?? 'latest'; // Default to latest import only
 
 // Get the latest import session ID
 $latestImportId = $db->fetchOne("SELECT MAX(id) as latest_id FROM camera_installation_imports");
@@ -23,11 +23,13 @@ $latestImportId = $latestImportId['latest_id'] ?? null;
 $sql = "
     SELECT
         cm.*,
+        cii.import_date,
         COUNT(DISTINCT cmi.id) as total_impacts,
         SUM(CASE WHEN cmi.requires_xero_correction = 1 THEN 1 ELSE 0 END) as xero_corrections_needed,
         SUM(CASE WHEN cmi.xero_corrected = 1 THEN 1 ELSE 0 END) as xero_corrections_done
     FROM camera_movements cm
     LEFT JOIN camera_movement_invoice_impacts cmi ON cm.id = cmi.camera_movement_id
+    LEFT JOIN camera_installation_imports cii ON cm.import_session_id = cii.id
     WHERE 1=1
 ";
 
@@ -207,6 +209,7 @@ require __DIR__ . '/../layouts/header.php';
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th>Import Date</th>
                                 <th>SAFR Code</th>
                                 <th>Camera Name</th>
                                 <th>From Store</th>
@@ -221,6 +224,15 @@ require __DIR__ . '/../layouts/header.php';
                         <tbody>
                             <?php foreach ($movements as $movement): ?>
                                 <tr>
+                                    <td>
+                                        <?php if ($movement['import_date']): ?>
+                                            <span class="badge bg-light text-dark">
+                                                <?= date('d/m/Y H:i', strtotime($movement['import_date'])) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><code><?= htmlspecialchars($movement['safr_code']) ?></code></td>
                                     <td><?= htmlspecialchars($movement['camera_name'] ?? 'N/A') ?></td>
                                     <td><?= htmlspecialchars($movement['from_store_name']) ?></td>
