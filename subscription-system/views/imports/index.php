@@ -301,7 +301,7 @@ require __DIR__ . '/../layouts/header.php';
                     <?php endif; ?>
                     <td>
                         <?php
-                        $errors = json_decode($import['error_log'] ?? $import['errors'] ?? '[]', true);
+                        $errors = json_decode($import['error_log'] ?? $import['errors'] ?? '[]', true) ?? [];
                         echo count($errors);
                         ?>
                     </td>
