@@ -13,6 +13,82 @@ $page = 'invoices';
 
 $db = Database::getInstance();
 
+// Handle CSV export BEFORE any HTML output
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $statusFilter = $_GET['status'] ?? 'all';
+    $search = $_GET['search'] ?? '';
+    $showForecast = isset($_GET['show_forecast']) && $_GET['show_forecast'] === '1';
+
+    // Build query with same filters as display
+    $where = [];
+    $params = [];
+
+    if (!$showForecast) {
+        $where[] = "(i.is_forecast = 0 OR i.is_forecast IS NULL)";
+    }
+
+    if ($statusFilter !== 'all') {
+        $where[] = "i.invoice_status = :status";
+        $params['status'] = $statusFilter;
+    }
+
+    if (!empty($search)) {
+        $where[] = "(i.invoice_number LIKE :search OR le.legal_entity_name LIKE :search)";
+        $params['search'] = "%$search%";
+    }
+
+    $whereClause = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+
+    $invoices = $db->fetchAll("
+        SELECT i.*,
+               le.legal_entity_name,
+               le.xero_company_name,
+               COUNT(DISTINCT ica.camera_installation_id) as camera_count
+        FROM invoices i
+        JOIN legal_entities le ON i.legal_entity_id = le.id
+        LEFT JOIN invoice_camera_allocations ica ON i.id = ica.invoice_id AND ica.removed_date IS NULL
+        $whereClause
+        GROUP BY i.id
+        ORDER BY i.invoice_date DESC
+    ", $params);
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="invoices_' . date('Y-m-d') . '.csv"');
+
+    $output = fopen('php://output', 'w');
+
+    // CSV headers
+    fputcsv($output, [
+        'Invoice Number',
+        'Legal Entity',
+        'Xero Company',
+        'Invoice Date',
+        'Amount',
+        'Status',
+        'Type',
+        'Cameras',
+        'Notes'
+    ]);
+
+    // Data rows
+    foreach ($invoices as $invoice) {
+        fputcsv($output, [
+            $invoice['invoice_number'],
+            $invoice['legal_entity_name'],
+            $invoice['xero_company_name'] ?: '-',
+            date('d/m/Y', strtotime($invoice['invoice_date'])),
+            number_format($invoice['invoice_amount'], 2),
+            ucfirst(str_replace('_', ' ', $invoice['invoice_status'])),
+            ($invoice['is_forecast'] ?? 0) ? 'Forecast' : 'Actual',
+            $invoice['camera_count'],
+            $invoice['notes'] ?: ''
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+
 // Check if recalculate is needed
 $needsRecalculate = false;
 
@@ -231,6 +307,20 @@ require __DIR__ . '/../layouts/header.php';
             <?php if (!empty($search) || $statusFilter !== 'all' || $showForecast): ?>
                 <a href="?page=invoices" class="btn">Clear Filters</a>
             <?php endif; ?>
+            <?php
+            // Build export URL with all current filters
+            $exportParams = [
+                'page' => 'invoices',
+                'export' => 'csv'
+            ];
+            if ($statusFilter !== 'all') $exportParams['status'] = $statusFilter;
+            if (!empty($search)) $exportParams['search'] = $search;
+            if ($showForecast) $exportParams['show_forecast'] = '1';
+            $exportUrl = '?' . http_build_query($exportParams);
+            ?>
+            <a href="<?= $exportUrl ?>" class="btn btn-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+            </a>
         </form>
     </div>
 

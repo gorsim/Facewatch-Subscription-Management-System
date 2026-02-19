@@ -19,6 +19,60 @@ $storeModel = new Store();
 $cameraModel = new CameraInstallation();
 $db = Database::getInstance();
 
+// Handle CSV export BEFORE any HTML output
+if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $allEntities = $legalEntityModel->getAllWithContracts();
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="subscribers_' . date('Y-m-d') . '.csv"');
+
+    $output = fopen('php://output', 'w');
+
+    // CSV headers
+    fputcsv($output, [
+        'Legal Entity ID',
+        'Legal Entity Name',
+        'Xero Company Name',
+        'Payment Terms (Days)',
+        'Total Stores',
+        'Active Cameras',
+        'Status',
+        'Termination Date'
+    ]);
+
+    // Data rows
+    foreach ($allEntities as $entity) {
+        // Get store count
+        $storeCount = $db->fetchOne(
+            "SELECT COUNT(*) as count FROM stores WHERE legal_entity_id = :id",
+            ['id' => $entity['id']]
+        )['count'] ?? 0;
+
+        // Get active camera count
+        $cameraCount = $db->fetchOne("
+            SELECT COUNT(*) as count
+            FROM camera_installations ci
+            JOIN stores s ON ci.store_id = s.id
+            WHERE s.legal_entity_id = :id
+            AND ci.removal_date IS NULL
+        ", ['id' => $entity['id']])['count'] ?? 0;
+
+        fputcsv($output, [
+            $entity['legal_entity_id'],
+            $entity['legal_entity_name'],
+            $entity['xero_company_name'] ?: '-',
+            $entity['payment_terms_days'] ?? 30,
+            $storeCount,
+            $cameraCount,
+            $entity['termination_date'] ? 'Terminated' : 'Active',
+            $entity['termination_date'] ? date('d/m/Y', strtotime($entity['termination_date'])) : '-'
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+
 $search = $_GET['search'] ?? '';
 $searchType = $_GET['search_type'] ?? 'all'; // all, entity, store, camera
 
@@ -129,7 +183,12 @@ require __DIR__ . '/../layouts/header.php';
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>Legal Entities (<?= count($legalEntities) ?>)</h2>
-        <a href="?page=subscribers&action=new" class="btn btn-success">+ Add New Legal Entity</a>
+        <div style="display: flex; gap: 10px;">
+            <a href="?page=subscribers&export=csv" class="btn btn-success">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+            </a>
+            <a href="?page=subscribers&action=new" class="btn btn-success">+ Add New Legal Entity</a>
+        </div>
     </div>
 
     <form method="GET" style="margin-bottom: 20px;">

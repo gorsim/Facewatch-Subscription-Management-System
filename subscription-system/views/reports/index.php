@@ -212,6 +212,106 @@ if ($report === 'cameras' && isset($_GET['export']) && $_GET['export'] === 'csv'
     exit;
 }
 
+// Stores Report CSV Export
+if ($report === 'stores' && isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $db = Database::getInstance();
+
+    // Get filter values
+    $filterLegalEntity = $_GET['filter_legal_entity'] ?? '';
+    $filterStatus = $_GET['filter_status'] ?? 'all';
+    $searchTerm = $_GET['search'] ?? '';
+
+    // Build WHERE conditions
+    $whereConditions = [];
+    $params = [];
+
+    // Legal entity filter
+    if ($filterLegalEntity) {
+        $whereConditions[] = "le.id = :legal_entity_id";
+        $params['legal_entity_id'] = $filterLegalEntity;
+    }
+
+    // Status filter
+    if ($filterStatus === 'active') {
+        $whereConditions[] = "s.termination_date IS NULL";
+    } elseif ($filterStatus === 'terminated') {
+        $whereConditions[] = "s.termination_date IS NOT NULL";
+    }
+
+    // Search filter
+    if ($searchTerm) {
+        $whereConditions[] = "(s.store_name LIKE :search OR s.store_id LIKE :search2 OR s.city LIKE :search3)";
+        $params['search'] = "%$searchTerm%";
+        $params['search2'] = "%$searchTerm%";
+        $params['search3'] = "%$searchTerm%";
+    }
+
+    $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+    $stores = $db->fetchAll("
+        SELECT
+            s.*,
+            le.legal_entity_name,
+            le.legal_entity_id,
+            (SELECT COUNT(*)
+             FROM camera_installations ci
+             WHERE ci.store_id = s.id
+             AND ci.removal_date IS NULL) as active_cameras,
+            (SELECT COUNT(*)
+             FROM camera_installations ci
+             WHERE ci.store_id = s.id) as total_cameras
+        FROM stores s
+        JOIN legal_entities le ON s.legal_entity_id = le.id
+        $whereClause
+        ORDER BY le.legal_entity_name, s.store_name
+    ", $params);
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="stores_' . date('Y-m-d') . '.csv"');
+
+    $output = fopen('php://output', 'w');
+
+    // CSV headers
+    fputcsv($output, [
+        'Legal Entity',
+        'Store Name',
+        'Store ID',
+        'Store Code',
+        'Address',
+        'City',
+        'Postcode',
+        'Active Cameras',
+        'Total Cameras',
+        'Status',
+        'Termination Date'
+    ]);
+
+    // Data rows
+    foreach ($stores as $store) {
+        $address = trim(implode(', ', array_filter([
+            $store['address_line1'],
+            $store['address_line2']
+        ])));
+
+        fputcsv($output, [
+            $store['legal_entity_name'],
+            $store['store_name'],
+            $store['store_id'],
+            $store['store_code'] ?: '-',
+            $address ?: '-',
+            $store['city'] ?: '-',
+            $store['postcode'] ?: '-',
+            $store['active_cameras'],
+            $store['total_cameras'],
+            $store['termination_date'] ? 'Terminated' : 'Active',
+            $store['termination_date'] ? date('d/m/Y', strtotime($store['termination_date'])) : '-'
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
+
 // Revenue Forecast CSV Export
 if ($report === 'revenue' && isset($_GET['export']) && $_GET['export'] === 'csv') {
     $db = Database::getInstance();
@@ -432,6 +532,7 @@ require __DIR__ . '/../layouts/header.php';
     <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
         <a href="?page=reports&report=prepayments" class="btn <?= $report === 'prepayments' ? 'btn-success' : '' ?>">Prepayments</a>
         <a href="?page=reports&report=cameras" class="btn <?= $report === 'cameras' ? 'btn-success' : '' ?>">Cameras</a>
+        <a href="?page=reports&report=stores" class="btn <?= $report === 'stores' ? 'btn-success' : '' ?>">Stores</a>
         <a href="?page=reports&report=cashflow" class="btn <?= $report === 'cashflow' ? 'btn-success' : '' ?>">Cash Flow</a>
         <a href="?page=reports&report=revenue" class="btn <?= $report === 'revenue' ? 'btn-success' : '' ?>">Revenue</a>
     </div>
@@ -745,6 +846,192 @@ require __DIR__ . '/../layouts/header.php';
                         <tr style="background: #f8f9fa; font-weight: bold;">
                             <td colspan="8">TOTAL CAMERAS</td>
                             <td><?= number_format($totalCameras) ?></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+
+<?php elseif ($report === 'stores'): ?>
+    <?php
+    $db = Database::getInstance();
+
+    // Get filter values
+    $filterLegalEntity = $_GET['filter_legal_entity'] ?? '';
+    $filterStatus = $_GET['filter_status'] ?? 'all';
+    $searchTerm = $_GET['search'] ?? '';
+
+    // Get all legal entities for filter dropdown
+    $allLegalEntities = $db->fetchAll("
+        SELECT id, legal_entity_name
+        FROM legal_entities
+        ORDER BY legal_entity_name
+    ");
+
+    // Build WHERE conditions
+    $whereConditions = [];
+    $params = [];
+
+    // Legal entity filter
+    if ($filterLegalEntity) {
+        $whereConditions[] = "le.id = :legal_entity_id";
+        $params['legal_entity_id'] = $filterLegalEntity;
+    }
+
+    // Status filter
+    if ($filterStatus === 'active') {
+        $whereConditions[] = "s.termination_date IS NULL";
+    } elseif ($filterStatus === 'terminated') {
+        $whereConditions[] = "s.termination_date IS NOT NULL";
+    }
+
+    // Search filter
+    if ($searchTerm) {
+        $whereConditions[] = "(s.store_name LIKE :search OR s.store_id LIKE :search2 OR s.city LIKE :search3)";
+        $params['search'] = "%$searchTerm%";
+        $params['search2'] = "%$searchTerm%";
+        $params['search3'] = "%$searchTerm%";
+    }
+
+    $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+    $stores = $db->fetchAll("
+        SELECT
+            s.*,
+            le.legal_entity_name,
+            le.legal_entity_id,
+            (SELECT COUNT(*)
+             FROM camera_installations ci
+             WHERE ci.store_id = s.id
+             AND ci.removal_date IS NULL) as active_cameras,
+            (SELECT COUNT(*)
+             FROM camera_installations ci
+             WHERE ci.store_id = s.id) as total_cameras
+        FROM stores s
+        JOIN legal_entities le ON s.legal_entity_id = le.id
+        $whereClause
+        ORDER BY le.legal_entity_name, s.store_name
+    ", $params);
+
+    $totalStores = count($stores);
+    $totalActiveCameras = array_sum(array_column($stores, 'active_cameras'));
+    ?>
+
+    <div class="card">
+        <h3>Stores Report</h3>
+        <p style="color: #666; margin-bottom: 20px;">View all stores/properties with camera installations</p>
+
+        <!-- Filters -->
+        <form method="GET" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <input type="hidden" name="page" value="reports">
+            <input type="hidden" name="report" value="stores">
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Legal Entity</label>
+                    <select name="filter_legal_entity" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">All Legal Entities</option>
+                        <?php foreach ($allLegalEntities as $entity): ?>
+                            <option value="<?= $entity['id'] ?>" <?= $filterLegalEntity == $entity['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($entity['legal_entity_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Status</label>
+                    <select name="filter_status" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>All Stores</option>
+                        <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Active Only</option>
+                        <option value="terminated" <?= $filterStatus === 'terminated' ? 'selected' : '' ?>>Terminated Only</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">Search</label>
+                    <input type="text"
+                           name="search"
+                           placeholder="Store name, ID, or city..."
+                           value="<?= htmlspecialchars($searchTerm) ?>"
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="?page=reports&report=stores" class="btn">Clear Filters</a>
+                <?php
+                // Build export URL with all current filters
+                $exportParams = [
+                    'page' => 'reports',
+                    'report' => 'stores',
+                    'export' => 'csv'
+                ];
+                if ($filterLegalEntity) $exportParams['filter_legal_entity'] = $filterLegalEntity;
+                if ($filterStatus !== 'all') $exportParams['filter_status'] = $filterStatus;
+                if ($searchTerm) $exportParams['search'] = $searchTerm;
+                $exportUrl = '?' . http_build_query($exportParams);
+                ?>
+                <a href="<?= $exportUrl ?>" class="btn btn-success">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+                </a>
+            </div>
+        </form>
+
+        <?php if (empty($stores)): ?>
+            <div style="text-align: center; padding: 40px; color: #999;">
+                <p style="font-size: 18px; margin-bottom: 10px;">📭 No stores found</p>
+                <p>Try adjusting your filters or search criteria</p>
+            </div>
+        <?php else: ?>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Legal Entity</th>
+                            <th>Store Name</th>
+                            <th>Store ID</th>
+                            <th>Store Code</th>
+                            <th>City</th>
+                            <th>Postcode</th>
+                            <th>Active Cameras</th>
+                            <th>Total Cameras</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($stores as $store): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($store['legal_entity_name']) ?></td>
+                                <td><strong><?= htmlspecialchars($store['store_name']) ?></strong></td>
+                                <td><code><?= htmlspecialchars($store['store_id']) ?></code></td>
+                                <td><?= htmlspecialchars($store['store_code'] ?: '-') ?></td>
+                                <td><?= htmlspecialchars($store['city'] ?: '-') ?></td>
+                                <td><?= htmlspecialchars($store['postcode'] ?: '-') ?></td>
+                                <td style="text-align: center;"><?= $store['active_cameras'] ?></td>
+                                <td style="text-align: center;"><?= $store['total_cameras'] ?></td>
+                                <td>
+                                    <?php if ($store['termination_date']): ?>
+                                        <span style="padding: 2px 8px; border-radius: 3px; font-size: 0.85em; background: #ffebee; color: #c62828;">
+                                            Terminated
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="padding: 2px 8px; border-radius: 3px; font-size: 0.85em; background: #e8f5e9; color: #2e7d32;">
+                                            Active
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f8f9fa; font-weight: bold;">
+                            <td colspan="6">TOTAL STORES</td>
+                            <td style="text-align: center;"><?= number_format($totalActiveCameras) ?></td>
+                            <td style="text-align: center;">-</td>
+                            <td><?= number_format($totalStores) ?></td>
                         </tr>
                     </tfoot>
                 </table>
