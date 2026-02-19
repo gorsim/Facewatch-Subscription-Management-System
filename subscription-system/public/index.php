@@ -123,6 +123,18 @@ try {
             }
             break;
 
+        case 'settings':
+            if ($action === 'account') {
+                require __DIR__ . '/../views/settings/account.php';
+            } elseif ($action === 'users') {
+                require __DIR__ . '/../views/settings/users.php';
+            } else {
+                // Default to account settings
+                header('Location: ?page=settings&action=account');
+                exit;
+            }
+            break;
+
         case 'logout':
             session_destroy();
             header('Location: ?page=login');

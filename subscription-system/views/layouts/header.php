@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'Facewatch Subscription Management' ?></title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f5f5f5; }
@@ -63,6 +64,7 @@
                 <a href="?page=import" class="<?= ($page ?? '') === 'import' ? 'active' : '' ?>">Import Data</a>
                 <a href="?page=reports" class="<?= ($page ?? '') === 'reports' ? 'active' : '' ?>">Reports</a>
                 <a href="?page=admin&action=pricing" class="<?= ($page ?? '') === 'admin' ? 'active' : '' ?>">💰 Pricing</a>
+                <a href="?page=settings&action=account" class="<?= ($page ?? '') === 'settings' ? 'active' : '' ?>">⚙️ Settings</a>
                 <a href="?page=logout">Logout</a>
             </nav>
         </div>
