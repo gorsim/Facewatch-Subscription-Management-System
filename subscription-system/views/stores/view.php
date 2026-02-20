@@ -76,8 +76,11 @@ require __DIR__ . '/../layouts/header.php';
                 <strong>Active Additional Cameras:</strong> <?= number_format($activeCameras['additional_cameras'] ?? 0) ?>
             </div>
         </div>
-        <div style="margin-top: 15px;">
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
             <a href="?page=stores&action=edit&id=<?= $store['id'] ?>" class="btn">Edit Store</a>
+            <a href="?page=stores&action=camera_history&store_id=<?= $store['id'] ?>" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                📹 View Camera History
+            </a>
         </div>
     </div>
 

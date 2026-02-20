@@ -64,7 +64,7 @@ try {
             break;
 
         case 'stores':
-            if ($action === 'edit' || $action === 'new' || $action === 'delete' || $action === 'view' || $action === 'revalidate') {
+            if ($action === 'edit' || $action === 'new' || $action === 'delete' || $action === 'view' || $action === 'revalidate' || $action === 'camera_history') {
                 require __DIR__ . '/../views/stores/' . $action . '.php';
             } else {
                 // Redirect to subscribers page if no action
