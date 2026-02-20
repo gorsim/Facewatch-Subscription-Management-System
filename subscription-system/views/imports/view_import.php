@@ -65,10 +65,10 @@ $cameras = $db->fetchAll("
     JOIN stores s ON ci.store_id = s.id
     JOIN legal_entities le ON s.legal_entity_id = le.id
     WHERE ci.created_at BETWEEN
-        DATE_SUB(:import_time, INTERVAL 1 MINUTE) AND
-        DATE_ADD(:import_time, INTERVAL 1 MINUTE)
+        DATE_SUB(:import_time1, INTERVAL 1 MINUTE) AND
+        DATE_ADD(:import_time2, INTERVAL 1 MINUTE)
     ORDER BY s.store_name, ci.installation_date DESC
-", ['import_time' => $importTime]);
+", ['import_time1' => $importTime, 'import_time2' => $importTime]);
 
 require __DIR__ . '/../layouts/header.php';
 ?>
