@@ -129,6 +129,15 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
+// DEBUG: Show what we got from database
+echo "<!-- DEBUG: Raw data from database -->\n";
+foreach ($cameraTimelines as $safrCode => $events) {
+    echo "<!-- Camera: $safrCode -->\n";
+    foreach ($events as $event) {
+        echo "<!--   {$event['event_type']}: {$event['installation_date']} -->\n";
+    }
+}
+
 // First, sort events within each camera timeline by date (newest first)
 foreach ($cameraTimelines as $safrCode => &$events) {
     usort($events, function($a, $b) {
@@ -144,6 +153,15 @@ foreach ($cameraTimelines as $safrCode => &$events) {
     });
 }
 unset($events); // Break reference
+
+// DEBUG: Show what we have after sorting
+echo "<!-- DEBUG: After sorting -->\n";
+foreach ($cameraTimelines as $safrCode => $events) {
+    echo "<!-- Camera: $safrCode -->\n";
+    foreach ($events as $event) {
+        echo "<!--   {$event['event_type']}: {$event['installation_date']} -->\n";
+    }
+}
 
 // Sort camera boxes: active cameras first, then inactive by original install date
 uasort($cameraTimelines, function($a, $b) {
