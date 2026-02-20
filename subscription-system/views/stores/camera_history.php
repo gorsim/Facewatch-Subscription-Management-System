@@ -51,7 +51,7 @@ $cameraHistory = $db->fetchAll("
         CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
         CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_installations ci
-    WHERE ci.store_id = :store_id
+    WHERE ci.store_id = :store_id1
 
     UNION ALL
 
@@ -69,7 +69,7 @@ $cameraHistory = $db->fetchAll("
         CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
-    WHERE cm.to_store_id = :store_id
+    WHERE cm.to_store_id = :store_id2
 
     UNION ALL
 
@@ -87,10 +87,14 @@ $cameraHistory = $db->fetchAll("
         CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
-    WHERE cm.from_store_id = :store_id
+    WHERE cm.from_store_id = :store_id3
 
     ORDER BY installation_date DESC, safr_code
-", ['store_id' => $storeId]);
+", [
+    'store_id1' => $storeId,
+    'store_id2' => $storeId,
+    'store_id3' => $storeId
+]);
 
 // Group by SAFR code to show complete timeline for each camera
 $cameraTimelines = [];
