@@ -4,9 +4,10 @@
  * Shows detailed information about a specific camera import
  */
 
-require_once __DIR__ . '/../../app/bootstrap.php';
-
 use App\Database;
+
+$pageTitle = 'Import Details';
+$page = 'imports';
 
 $db = Database::getInstance();
 

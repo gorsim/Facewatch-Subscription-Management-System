@@ -4,9 +4,10 @@
  * Shows all camera file uploads with details
  */
 
-require_once __DIR__ . '/../../app/bootstrap.php';
-
 use App\Database;
+
+$pageTitle = 'Import History';
+$page = 'imports';
 
 $db = Database::getInstance();
 
