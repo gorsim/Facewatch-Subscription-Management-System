@@ -119,15 +119,6 @@ $cameraHistory = $db->fetchAll("
     'store_id4' => $storeId
 ]);
 
-// DEBUG: Show raw data for CA1A35
-echo "<!-- DEBUG: Raw camera history data -->\n";
-foreach ($cameraHistory as $event) {
-    if ($event['safr_code'] === 'CA1A35') {
-        echo "<!-- CA1A35: " . $event['event_type'] . " on " . $event['installation_date'] . " -->\n";
-    }
-}
-echo "<!-- END DEBUG -->\n";
-
 // Group by SAFR code to show complete timeline for each camera
 $cameraTimelines = [];
 foreach ($cameraHistory as $event) {
