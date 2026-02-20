@@ -38,15 +38,16 @@ if (!$store) {
 // 2. Camera movements TO this store
 // 3. Camera movements FROM this store
 $cameraHistory = $db->fetchAll("
+    -- Original installations (show as separate event)
     SELECT
         ci.id,
         CAST(ci.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
         CAST(ci.camera_name AS CHAR) COLLATE utf8mb4_unicode_ci as camera_name,
         ci.camera_type,
         ci.installation_date,
-        ci.removal_date,
+        NULL as removal_date,
         CAST(ci.notes AS CHAR) COLLATE utf8mb4_unicode_ci as notes,
-        'installation' as event_type,
+        'installed' as event_type,
         NULL as movement_id,
         CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
         CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
@@ -55,6 +56,26 @@ $cameraHistory = $db->fetchAll("
 
     UNION ALL
 
+    -- Removals (show as separate event)
+    SELECT
+        ci.id,
+        CAST(ci.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
+        CAST(ci.camera_name AS CHAR) COLLATE utf8mb4_unicode_ci as camera_name,
+        ci.camera_type,
+        ci.removal_date as installation_date,
+        ci.removal_date,
+        CAST(CONCAT('Removed from store', CASE WHEN ci.notes IS NOT NULL THEN CONCAT(' - ', ci.notes) ELSE '' END) AS CHAR) COLLATE utf8mb4_unicode_ci as notes,
+        'removed' as event_type,
+        NULL as movement_id,
+        CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
+        CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
+    FROM camera_installations ci
+    WHERE ci.store_id = :store_id2
+    AND ci.removal_date IS NOT NULL
+
+    UNION ALL
+
+    -- Camera movements IN
     SELECT
         ci.id,
         CAST(cm.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
@@ -69,10 +90,11 @@ $cameraHistory = $db->fetchAll("
         CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
-    WHERE cm.to_store_id = :store_id2
+    WHERE cm.to_store_id = :store_id3
 
     UNION ALL
 
+    -- Camera movements OUT
     SELECT
         ci.id,
         CAST(cm.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
@@ -87,13 +109,14 @@ $cameraHistory = $db->fetchAll("
         CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
-    WHERE cm.from_store_id = :store_id3
+    WHERE cm.from_store_id = :store_id4
 
     ORDER BY installation_date DESC, safr_code
 ", [
     'store_id1' => $storeId,
     'store_id2' => $storeId,
-    'store_id3' => $storeId
+    'store_id3' => $storeId,
+    'store_id4' => $storeId
 ]);
 
 // Group by SAFR code to show complete timeline for each camera
@@ -166,14 +189,11 @@ require __DIR__ . '/../layouts/header.php';
     <?php else: ?>
         <?php foreach ($cameraTimelines as $safrCode => $events): ?>
             <?php
-            // Determine current status
+            // Determine current status - camera is active if latest event is 'installed' or 'moved_in'
             $isActive = false;
             $latestEvent = $events[0]; // Events are sorted by date DESC
-            foreach ($events as $event) {
-                if ($event['event_type'] === 'installation' && $event['removal_date'] === null) {
-                    $isActive = true;
-                    break;
-                }
+            if ($latestEvent['event_type'] === 'installed' || $latestEvent['event_type'] === 'moved_in') {
+                $isActive = true;
             }
             ?>
             <div style="margin-bottom: 30px; border: 2px solid <?= $isActive ? '#4caf50' : '#ddd' ?>; border-radius: 8px; overflow: hidden;">
@@ -218,19 +238,23 @@ require __DIR__ . '/../layouts/header.php';
                             <div style="position: relative; margin-bottom: <?= $index < count($events) - 1 ? '25px' : '0' ?>;">
                                 <!-- Timeline dot -->
                                 <div style="position: absolute; left: -32px; top: 5px; width: 12px; height: 12px;
-                                            background: <?= $event['event_type'] === 'installation' ? '#2196f3' :
-                                                          ($event['event_type'] === 'moved_in' ? '#4caf50' : '#ff9800') ?>;
+                                            background: <?= $event['event_type'] === 'installed' ? '#2196f3' :
+                                                          ($event['event_type'] === 'removed' ? '#f44336' :
+                                                          ($event['event_type'] === 'moved_in' ? '#4caf50' : '#ff9800')) ?>;
                                             border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 2px #ddd;"></div>
 
                                 <!-- Event details -->
                                 <div style="background: #f8f9fa; padding: 12px 15px; border-radius: 6px; border-left: 3px solid
-                                            <?= $event['event_type'] === 'installation' ? '#2196f3' :
-                                               ($event['event_type'] === 'moved_in' ? '#4caf50' : '#ff9800') ?>;">
+                                            <?= $event['event_type'] === 'installed' ? '#2196f3' :
+                                               ($event['event_type'] === 'removed' ? '#f44336' :
+                                               ($event['event_type'] === 'moved_in' ? '#4caf50' : '#ff9800')) ?>;">
                                     <div style="display: flex; justify-content: space-between; align-items: start;">
                                         <div style="flex: 1;">
                                             <strong style="color: #333; font-size: 1.05em;">
-                                                <?php if ($event['event_type'] === 'installation'): ?>
-                                                    <?= $event['removal_date'] ? '🔴 Removed' : '✅ Installed' ?>
+                                                <?php if ($event['event_type'] === 'installed'): ?>
+                                                    ✅ Installed
+                                                <?php elseif ($event['event_type'] === 'removed'): ?>
+                                                    🔴 Removed
                                                 <?php elseif ($event['event_type'] === 'moved_in'): ?>
                                                     📥 Moved In
                                                 <?php else: ?>
@@ -239,9 +263,6 @@ require __DIR__ . '/../layouts/header.php';
                                             </strong>
                                             <div style="color: #666; margin-top: 5px; font-size: 0.95em;">
                                                 <?= date('d M Y', strtotime($event['installation_date'])) ?>
-                                                <?php if ($event['removal_date'] && $event['event_type'] === 'installation'): ?>
-                                                    → <?= date('d M Y', strtotime($event['removal_date'])) ?>
-                                                <?php endif; ?>
                                             </div>
                                             <?php if ($event['notes']): ?>
                                                 <div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; font-size: 0.9em;">
