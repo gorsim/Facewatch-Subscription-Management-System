@@ -113,9 +113,14 @@ require __DIR__ . '/../layouts/header.php';
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Import Data</h2>
-        <a href="?page=cameras&action=movements" class="btn btn-info">
-            <i class="bi bi-arrow-left-right"></i> View Camera Movements
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="?page=imports&action=history" class="btn btn-info">
+                📁 View Import History
+            </a>
+            <a href="?page=cameras&action=movements" class="btn btn-info">
+                🔄 View Camera Movements
+            </a>
+        </div>
     </div>
 </div>
 

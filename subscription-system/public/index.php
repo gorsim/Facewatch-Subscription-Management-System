@@ -101,6 +101,17 @@ try {
             require __DIR__ . '/../views/imports/index.php';
             break;
 
+        case 'imports':
+            $action = $_GET['action'] ?? 'index';
+            if ($action === 'history') {
+                require __DIR__ . '/../views/imports/history.php';
+            } elseif ($action === 'view_import') {
+                require __DIR__ . '/../views/imports/view_import.php';
+            } else {
+                require __DIR__ . '/../views/imports/index.php';
+            }
+            break;
+
         case 'reports':
             require __DIR__ . '/../views/reports/index.php';
             break;
