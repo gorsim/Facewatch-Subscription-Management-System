@@ -129,29 +129,7 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
-// DEBUG: Show what we got from database
-echo "<!-- DEBUG: Raw data from database -->\n";
-foreach ($cameraTimelines as $safrCode => $events) {
-    echo "<!-- Camera: $safrCode -->\n";
-    foreach ($events as $event) {
-        echo "<!--   {$event['event_type']}: {$event['installation_date']} (ID: {$event['id']}) -->\n";
-    }
-}
-
-// Show the actual database records for CAABCD
-echo "<!-- DEBUG: Database records for CAABCD -->\n";
-$caabcdRecords = $db->fetchAll("
-    SELECT id, safr_code, installation_date, removal_date, notes
-    FROM camera_installations
-    WHERE safr_code = 'CAABCD'
-    ORDER BY installation_date
-");
-foreach ($caabcdRecords as $record) {
-    echo "<!-- ID: {$record['id']}, Installed: {$record['installation_date']}, Removed: " .
-         ($record['removal_date'] ?? 'NULL') . ", Notes: " . ($record['notes'] ?? 'NULL') . " -->\n";
-}
-
-// First, sort events within each camera timeline by date (newest first)
+// Sort events within each camera timeline by date (newest first)
 foreach ($cameraTimelines as $safrCode => &$events) {
     usort($events, function($a, $b) {
         // Compare by installation_date (which holds the event date)
@@ -166,15 +144,6 @@ foreach ($cameraTimelines as $safrCode => &$events) {
     });
 }
 unset($events); // Break reference
-
-// DEBUG: Show what we have after sorting
-echo "<!-- DEBUG: After sorting -->\n";
-foreach ($cameraTimelines as $safrCode => $events) {
-    echo "<!-- Camera: $safrCode -->\n";
-    foreach ($events as $event) {
-        echo "<!--   {$event['event_type']}: {$event['installation_date']} -->\n";
-    }
-}
 
 // Sort camera boxes: active cameras first, then inactive by original install date
 uasort($cameraTimelines, function($a, $b) {
