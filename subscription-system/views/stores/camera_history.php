@@ -130,10 +130,17 @@ foreach ($cameraHistory as $event) {
 }
 
 // First, sort events within each camera timeline by date (newest first)
-foreach ($cameraTimelines as &$events) {
+foreach ($cameraTimelines as $safrCode => &$events) {
     usort($events, function($a, $b) {
         // Compare by installation_date (which holds the event date)
-        return strcmp($b['installation_date'], $a['installation_date']);
+        // Return negative if $b should come before $a (descending order)
+        $dateA = $a['installation_date'];
+        $dateB = $b['installation_date'];
+
+        // Descending order: newer dates first
+        if ($dateB > $dateA) return 1;
+        if ($dateB < $dateA) return -1;
+        return 0;
     });
 }
 unset($events); // Break reference
