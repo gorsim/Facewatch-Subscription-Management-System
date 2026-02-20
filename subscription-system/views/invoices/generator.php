@@ -287,7 +287,7 @@ require __DIR__ . '/../layouts/header.php';
                 </div>
 
                 <table>
-                    <thead>
+                    <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                         <tr>
                             <th style="width: 40px;">
                                 <input type="checkbox" id="selectAll" title="Select all cameras">

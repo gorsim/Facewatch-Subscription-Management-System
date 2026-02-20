@@ -410,7 +410,7 @@ require __DIR__ . '/../layouts/header.php';
         </p>
     <?php else: ?>
         <table>
-            <thead>
+            <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                 <tr>
                     <th>Invoice #</th>
                     <th>Status</th>

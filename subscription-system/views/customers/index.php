@@ -220,7 +220,7 @@ require __DIR__ . '/../layouts/header.php';
         <div style="margin-bottom: 30px;">
             <h3 style="color: #f5576c; margin-bottom: 15px;">🏪 Store Results (<?= count($storeResults) ?>)</h3>
             <table>
-                <thead>
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
                         <th>Store ID</th>
                         <th>Store Name</th>
@@ -259,7 +259,7 @@ require __DIR__ . '/../layouts/header.php';
         <div style="margin-bottom: 30px;">
             <h3 style="color: #4facfe; margin-bottom: 15px;">📹 Camera Results (<?= count($cameraResults) ?>)</h3>
             <table>
-                <thead>
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
                         <th>SAFR Code</th>
                         <th>Camera Name</th>
@@ -311,7 +311,7 @@ require __DIR__ . '/../layouts/header.php';
             <h3 style="color: #667eea; margin-bottom: 15px;">🏢 Legal Entity Results (<?= count($legalEntities) ?>)</h3>
         <?php endif; ?>
         <table>
-            <thead>
+            <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                 <tr>
                     <th>Legal Entity ID</th>
                     <th>Legal Entity Name</th>

@@ -599,7 +599,7 @@ require __DIR__ . '/../layouts/header.php';
         <p><strong>Total Prepayment Balance: £<?= number_format($totalPrepayment, 2) ?></strong></p>
         
         <table>
-            <thead>
+            <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                 <tr>
                     <th>Legal Entity</th>
                     <th>Invoice #</th>
@@ -792,7 +792,7 @@ require __DIR__ . '/../layouts/header.php';
         <?php else: ?>
             <div style="overflow-x: auto;">
                 <table>
-                    <thead>
+                    <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                         <tr>
                             <th>Legal Entity</th>
                             <th>Store Name</th>
@@ -988,7 +988,7 @@ require __DIR__ . '/../layouts/header.php';
         <?php else: ?>
             <div style="overflow-x: auto;">
                 <table>
-                    <thead>
+                    <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                         <tr>
                             <th>Legal Entity</th>
                             <th>Store Name</th>
@@ -1115,7 +1115,7 @@ require __DIR__ . '/../layouts/header.php';
 
         <div style="overflow-x: auto;">
             <table>
-                <thead>
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
                         <th>Month</th>
                         <th>Expected Cash Inflow</th>
@@ -1261,7 +1261,7 @@ require __DIR__ . '/../layouts/header.php';
 
         <div style="overflow-x: auto;">
             <table>
-                <thead>
+                <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
                         <th>Month</th>
                         <th>Prepaid (Start)</th>
