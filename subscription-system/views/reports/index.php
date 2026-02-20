@@ -597,7 +597,8 @@ require __DIR__ . '/../layouts/header.php';
         </form>
 
         <p><strong>Total Prepayment Balance: £<?= number_format($totalPrepayment, 2) ?></strong></p>
-        
+
+        <div style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd;">
         <table>
             <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                 <tr>
@@ -626,6 +627,7 @@ require __DIR__ . '/../layouts/header.php';
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
     </div>
 
 <?php elseif ($report === 'cameras'): ?>
@@ -790,7 +792,7 @@ require __DIR__ . '/../layouts/header.php';
                 No cameras found matching the selected filters.
             </div>
         <?php else: ?>
-            <div style="overflow-x: auto;">
+            <div style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd;">
                 <table>
                     <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                         <tr>
@@ -986,7 +988,7 @@ require __DIR__ . '/../layouts/header.php';
                 <p>Try adjusting your filters or search criteria</p>
             </div>
         <?php else: ?>
-            <div style="overflow-x: auto;">
+            <div style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd;">
                 <table>
                     <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                         <tr>
@@ -1113,7 +1115,7 @@ require __DIR__ . '/../layouts/header.php';
             Showing last 3 months through to 31st March 2031.
         </p>
 
-        <div style="overflow-x: auto;">
+        <div style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd;">
             <table>
                 <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
@@ -1259,7 +1261,7 @@ require __DIR__ . '/../layouts/header.php';
             Showing previous 12 months (historic) and forecast to March 2031.
         </p>
 
-        <div style="overflow-x: auto;">
+        <div style="max-height: 600px; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd;">
             <table>
                 <thead style="position: sticky; top: 0; background: white; z-index: 10;">
                     <tr>
