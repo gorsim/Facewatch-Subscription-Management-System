@@ -134,8 +134,21 @@ echo "<!-- DEBUG: Raw data from database -->\n";
 foreach ($cameraTimelines as $safrCode => $events) {
     echo "<!-- Camera: $safrCode -->\n";
     foreach ($events as $event) {
-        echo "<!--   {$event['event_type']}: {$event['installation_date']} -->\n";
+        echo "<!--   {$event['event_type']}: {$event['installation_date']} (ID: {$event['id']}) -->\n";
     }
+}
+
+// Show the actual database records for CAABCD
+echo "<!-- DEBUG: Database records for CAABCD -->\n";
+$caabcdRecords = $db->fetchAll("
+    SELECT id, safr_code, installation_date, removal_date, notes
+    FROM camera_installations
+    WHERE safr_code = 'CAABCD'
+    ORDER BY installation_date
+");
+foreach ($caabcdRecords as $record) {
+    echo "<!-- ID: {$record['id']}, Installed: {$record['installation_date']}, Removed: " .
+         ($record['removal_date'] ?? 'NULL') . ", Notes: " . ($record['notes'] ?? 'NULL') . " -->\n";
 }
 
 // First, sort events within each camera timeline by date (newest first)
