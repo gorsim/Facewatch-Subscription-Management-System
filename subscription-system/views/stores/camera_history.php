@@ -129,7 +129,7 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
-// Sort camera boxes: active cameras first, then by SAFR code
+// Sort camera boxes: active cameras first, then inactive by original install date
 uasort($cameraTimelines, function($a, $b) {
     // Check if cameras are active (latest event is 'installed' or 'moved_in')
     $aActive = ($a[0]['event_type'] === 'installed' || $a[0]['event_type'] === 'moved_in');
@@ -139,7 +139,15 @@ uasort($cameraTimelines, function($a, $b) {
     if ($aActive && !$bActive) return -1;
     if (!$aActive && $bActive) return 1;
 
-    // If both active or both inactive, sort by SAFR code
+    // If both inactive, sort by original installation date (oldest first)
+    // The last event in the array is the oldest (since we reversed them)
+    if (!$aActive && !$bActive) {
+        $aOldest = end($a)['installation_date'];
+        $bOldest = end($b)['installation_date'];
+        return strcmp($aOldest, $bOldest);
+    }
+
+    // If both active, sort by SAFR code
     return strcmp($a[0]['safr_code'], $b[0]['safr_code']);
 });
 
