@@ -119,6 +119,15 @@ $cameraHistory = $db->fetchAll("
     'store_id4' => $storeId
 ]);
 
+// DEBUG: Show raw data for CA1A35
+echo "<!-- DEBUG: Raw camera history data -->\n";
+foreach ($cameraHistory as $event) {
+    if ($event['safr_code'] === 'CA1A35') {
+        echo "<!-- CA1A35: " . $event['event_type'] . " on " . $event['installation_date'] . " -->\n";
+    }
+}
+echo "<!-- END DEBUG -->\n";
+
 // Group by SAFR code to show complete timeline for each camera
 $cameraTimelines = [];
 foreach ($cameraHistory as $event) {
@@ -228,12 +237,21 @@ require __DIR__ . '/../layouts/header.php';
     <?php else: ?>
         <?php foreach ($cameraTimelines as $safrCode => $events): ?>
             <?php
-            // Determine current status - camera is active if latest event is 'installed' or 'moved_in'
-            $isActive = false;
-            $latestEvent = $events[0]; // Events are reversed, so [0] is the newest event
-            if ($latestEvent['event_type'] === 'installed' || $latestEvent['event_type'] === 'moved_in') {
-                $isActive = true;
+            // Determine current status by counting net installs vs removals
+            $installCount = 0;
+            $removalCount = 0;
+
+            foreach ($events as $event) {
+                if ($event['event_type'] === 'installed' || $event['event_type'] === 'moved_in') {
+                    $installCount++;
+                } elseif ($event['event_type'] === 'removed' || $event['event_type'] === 'moved_out') {
+                    $removalCount++;
+                }
             }
+
+            // Camera is active if net count > 0 (more installs than removals)
+            $isActive = ($installCount - $removalCount) > 0;
+            $latestEvent = $events[0]; // Events are reversed, so [0] is the newest event
             ?>
             <div style="margin-bottom: 30px; border: 2px solid <?= $isActive ? '#4caf50' : '#ddd' ?>; border-radius: 8px; overflow: hidden;">
                 <!-- Camera Header -->
