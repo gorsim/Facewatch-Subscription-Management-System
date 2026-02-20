@@ -38,57 +38,57 @@ if (!$store) {
 // 2. Camera movements TO this store
 // 3. Camera movements FROM this store
 $cameraHistory = $db->fetchAll("
-    SELECT 
+    SELECT
         ci.id,
-        ci.safr_code,
-        ci.camera_name,
+        CAST(ci.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
+        CAST(ci.camera_name AS CHAR) COLLATE utf8mb4_unicode_ci as camera_name,
         ci.camera_type,
         ci.installation_date,
         ci.removal_date,
-        ci.notes,
+        CAST(ci.notes AS CHAR) COLLATE utf8mb4_unicode_ci as notes,
         'installation' as event_type,
         NULL as movement_id,
-        NULL as from_store_name,
-        NULL as to_store_name
+        CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
+        CAST(NULL AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_installations ci
     WHERE ci.store_id = :store_id
-    
+
     UNION ALL
-    
+
     SELECT
         ci.id,
-        cm.safr_code,
-        cm.camera_name,
+        CAST(cm.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
+        CAST(cm.camera_name AS CHAR) COLLATE utf8mb4_unicode_ci as camera_name,
         ci.camera_type,
         cm.installation_date,
         NULL as removal_date,
-        CONCAT('Moved from: ', cm.from_store_name) as notes,
+        CAST(CONCAT('Moved from: ', cm.from_store_name) AS CHAR) COLLATE utf8mb4_unicode_ci as notes,
         'moved_in' as event_type,
         cm.id as movement_id,
-        cm.from_store_name,
-        cm.to_store_name
+        CAST(cm.from_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
+        CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
     WHERE cm.to_store_id = :store_id
-    
+
     UNION ALL
-    
+
     SELECT
         ci.id,
-        cm.safr_code,
-        cm.camera_name,
+        CAST(cm.safr_code AS CHAR) COLLATE utf8mb4_unicode_ci as safr_code,
+        CAST(cm.camera_name AS CHAR) COLLATE utf8mb4_unicode_ci as camera_name,
         ci.camera_type,
         cm.removal_date as installation_date,
         cm.removal_date,
-        CONCAT('Moved to: ', cm.to_store_name) as notes,
+        CAST(CONCAT('Moved to: ', cm.to_store_name) AS CHAR) COLLATE utf8mb4_unicode_ci as notes,
         'moved_out' as event_type,
         cm.id as movement_id,
-        cm.from_store_name,
-        cm.to_store_name
+        CAST(cm.from_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as from_store_name,
+        CAST(cm.to_store_name AS CHAR) COLLATE utf8mb4_unicode_ci as to_store_name
     FROM camera_movements cm
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
     WHERE cm.from_store_id = :store_id
-    
+
     ORDER BY installation_date DESC, safr_code
 ", ['store_id' => $storeId]);
 
