@@ -129,9 +129,12 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
-// First, reverse events within each camera timeline so newest is at top
+// First, sort events within each camera timeline by date (newest first)
 foreach ($cameraTimelines as &$events) {
-    $events = array_reverse($events);
+    usort($events, function($a, $b) {
+        // Compare by installation_date (which holds the event date)
+        return strcmp($b['installation_date'], $a['installation_date']);
+    });
 }
 unset($events); // Break reference
 
