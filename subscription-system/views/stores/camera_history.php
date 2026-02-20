@@ -129,6 +129,26 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
+// Sort camera boxes: active cameras first, then by SAFR code
+uasort($cameraTimelines, function($a, $b) {
+    // Check if cameras are active (latest event is 'installed' or 'moved_in')
+    $aActive = ($a[0]['event_type'] === 'installed' || $a[0]['event_type'] === 'moved_in');
+    $bActive = ($b[0]['event_type'] === 'installed' || $b[0]['event_type'] === 'moved_in');
+
+    // Active cameras come first
+    if ($aActive && !$bActive) return -1;
+    if (!$aActive && $bActive) return 1;
+
+    // If both active or both inactive, sort by SAFR code
+    return strcmp($a[0]['safr_code'], $b[0]['safr_code']);
+});
+
+// Reverse events within each camera timeline so newest is at top
+foreach ($cameraTimelines as &$events) {
+    $events = array_reverse($events);
+}
+unset($events); // Break reference
+
 // Get current active cameras count
 $activeCameras = $db->fetchOne("
     SELECT COUNT(*) as count
@@ -191,7 +211,7 @@ require __DIR__ . '/../layouts/header.php';
             <?php
             // Determine current status - camera is active if latest event is 'installed' or 'moved_in'
             $isActive = false;
-            $latestEvent = $events[0]; // Events are sorted by date DESC
+            $latestEvent = $events[0]; // Events are reversed, so [0] is the newest event
             if ($latestEvent['event_type'] === 'installed' || $latestEvent['event_type'] === 'moved_in') {
                 $isActive = true;
             }
