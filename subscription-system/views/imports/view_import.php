@@ -41,7 +41,7 @@ if (!empty($import['error_log'])) {
 
 // Get camera movements detected in this import
 $movements = $db->fetchAll("
-    SELECT 
+    SELECT
         cm.*,
         fs.store_name as from_store_name,
         ts.store_name as to_store_name
@@ -51,6 +51,24 @@ $movements = $db->fetchAll("
     WHERE cm.import_session_id = :import_id
     ORDER BY cm.detected_at DESC
 ", ['import_id' => $importId]);
+
+// Get all cameras that were created/updated during this import
+// We'll look for cameras created/updated around the import time (within 1 minute)
+$importTime = $import['import_date'];
+$cameras = $db->fetchAll("
+    SELECT
+        ci.*,
+        s.store_name,
+        s.store_id as store_code,
+        le.legal_entity_name
+    FROM camera_installations ci
+    JOIN stores s ON ci.store_id = s.id
+    JOIN legal_entities le ON s.legal_entity_id = le.id
+    WHERE ci.created_at BETWEEN
+        DATE_SUB(:import_time, INTERVAL 1 MINUTE) AND
+        DATE_ADD(:import_time, INTERVAL 1 MINUTE)
+    ORDER BY s.store_name, ci.installation_date DESC
+", ['import_time' => $importTime]);
 
 require __DIR__ . '/../layouts/header.php';
 ?>
@@ -122,13 +140,90 @@ require __DIR__ . '/../layouts/header.php';
         </div>
     </div>
 
+    <!-- Imported Camera Data -->
+    <?php if (!empty($cameras)): ?>
+        <h3>📹 Camera Data Imported</h3>
+        <p style="color: #666; margin-bottom: 15px;">
+            This import processed <?= count($cameras) ?> camera record(s).
+        </p>
+
+        <table style="margin-bottom: 30px;">
+            <thead>
+                <tr>
+                    <th>Store</th>
+                    <th>Legal Entity</th>
+                    <th>SAFR Code</th>
+                    <th>Camera Name</th>
+                    <th>Type</th>
+                    <th>Installation Date</th>
+                    <th>Removal Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($cameras as $camera): ?>
+                    <tr>
+                        <td>
+                            <strong><?= htmlspecialchars($camera['store_name']) ?></strong>
+                            <?php if ($camera['store_code']): ?>
+                                <br><small style="color: #666;"><?= htmlspecialchars($camera['store_code']) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($camera['legal_entity_name']) ?></td>
+                        <td>
+                            <?php if ($camera['safr_code']): ?>
+                                <strong><?= htmlspecialchars($camera['safr_code']) ?></strong>
+                            <?php else: ?>
+                                <span style="color: #999;">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($camera['camera_name']): ?>
+                                <?= htmlspecialchars($camera['camera_name']) ?>
+                            <?php else: ?>
+                                <span style="color: #999;">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <span style="background: <?= $camera['camera_type'] === 'main' ? '#e3f2fd' : '#fff3e0' ?>;
+                                         padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">
+                                <?= ucfirst($camera['camera_type']) ?>
+                            </span>
+                        </td>
+                        <td><?= date('d M Y', strtotime($camera['installation_date'])) ?></td>
+                        <td>
+                            <?php if ($camera['removal_date']): ?>
+                                <span style="color: #c62828;">
+                                    <?= date('d M Y', strtotime($camera['removal_date'])) ?>
+                                </span>
+                            <?php else: ?>
+                                <span style="color: #999;">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if (empty($camera['removal_date'])): ?>
+                                <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold;">
+                                    ✓ Active
+                                </span>
+                            <?php else: ?>
+                                <span style="background: #f5f5f5; color: #666; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">
+                                    Removed
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+
     <!-- Camera Movements -->
     <?php if (!empty($movements)): ?>
         <h3>🔄 Camera Movements Detected</h3>
         <p style="color: #666; margin-bottom: 15px;">
             This import detected <?= count($movements) ?> camera movement(s) between stores.
         </p>
-        
+
         <table style="margin-bottom: 30px;">
             <thead>
                 <tr>
