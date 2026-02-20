@@ -129,9 +129,16 @@ foreach ($cameraHistory as $event) {
     $cameraTimelines[$safrCode][] = $event;
 }
 
+// First, reverse events within each camera timeline so newest is at top
+foreach ($cameraTimelines as &$events) {
+    $events = array_reverse($events);
+}
+unset($events); // Break reference
+
 // Sort camera boxes: active cameras first, then inactive by original install date
 uasort($cameraTimelines, function($a, $b) {
     // Check if cameras are active (latest event is 'installed' or 'moved_in')
+    // After reversing, $a[0] is the newest event
     $aActive = ($a[0]['event_type'] === 'installed' || $a[0]['event_type'] === 'moved_in');
     $bActive = ($b[0]['event_type'] === 'installed' || $b[0]['event_type'] === 'moved_in');
 
@@ -140,7 +147,7 @@ uasort($cameraTimelines, function($a, $b) {
     if (!$aActive && $bActive) return 1;
 
     // If both inactive, sort by original installation date (oldest first)
-    // The last event in the array is the oldest (since we reversed them)
+    // After reversing, the last event in the array is the oldest
     if (!$aActive && !$bActive) {
         $aOldest = end($a)['installation_date'];
         $bOldest = end($b)['installation_date'];
@@ -150,12 +157,6 @@ uasort($cameraTimelines, function($a, $b) {
     // If both active, sort by SAFR code
     return strcmp($a[0]['safr_code'], $b[0]['safr_code']);
 });
-
-// Reverse events within each camera timeline so newest is at top
-foreach ($cameraTimelines as &$events) {
-    $events = array_reverse($events);
-}
-unset($events); // Break reference
 
 // Get current active cameras count
 $activeCameras = $db->fetchOne("
