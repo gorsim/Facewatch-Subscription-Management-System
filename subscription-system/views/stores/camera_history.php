@@ -111,7 +111,7 @@ $cameraHistory = $db->fetchAll("
     JOIN camera_installations ci ON cm.camera_installation_id = ci.id
     WHERE cm.from_store_id = :store_id4
 
-    ORDER BY installation_date DESC, safr_code
+    ORDER BY safr_code, installation_date ASC
 ", [
     'store_id1' => $storeId,
     'store_id2' => $storeId,
